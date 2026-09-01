@@ -1,0 +1,13 @@
+{
+  "name": "Karts2Me Driver",
+  "short_name": "K2M Driver",
+  "description": "Accept rides and manage your Karts2Me driver account.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#DCD7CB",
+  "theme_color": "#0E1A2B",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "logo.png", "sizes": "200x200", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Karts2Me — Driver</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0E1A2B">
+<link rel="apple-touch-icon" href="/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --ink:#0E1A2B; --ink-2:#16263D; --cream:#FAF7F0; --card:#FFFFFF;
+    --gold:#E8A83C; --coral:#E85D3F; --turf:#3D7A4D; --slate:#64748B; --slate-100:#E7E9ED;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0; background:#DCD7CB; font-family:'Inter',sans-serif; color:var(--ink); -webkit-text-size-adjust:100%;}
+  h1,h2,h3,p{margin:0;}
+  button,select,input{font-family:inherit;}
+  .display{font-family:'Space Grotesk',sans-serif;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+
+  body{display:flex; align-items:flex-start; justify-content:center; min-height:100vh; padding:24px 0;}
+  .phone{ width:390px; max-width:100vw; height:844px; max-height:92vh; background:var(--cream); overflow:hidden; position:relative; margin:0 auto; }
+  @media (min-width:440px){ .phone{ border-radius:44px; border:8px solid #0a0a0a; box-shadow:0 30px 60px -20px rgba(0,0,0,0.35); } }
+  .notch{ position:absolute; top:0; left:50%; transform:translateX(-50%); width:120px; height:26px; background:#0a0a0a; border-radius:0 0 16px 16px; z-index:50; }
+  .app-logo-badge{ position:absolute; top:14px; left:16px; width:26px; height:26px; border-radius:8px; object-fit:cover; z-index:40; box-shadow:0 1px 4px rgba(0,0,0,0.25); }
+  .screen{ position:absolute; top:0; left:0; right:0; bottom:64px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  .screen.full{ bottom:0; }
+
+  .badge{display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; padding:3px 12px 3px 9px; clip-path: polygon(8% 0, 92% 0, 100% 50%, 92% 100%, 8% 100%, 0 50%);}
+  .b-turf{background:#E7F3E9; color:#3D7A4D;} .b-gold{background:#FBF0DC; color:#B87A16;}
+  .b-coral{background:#FBE7E1; color:#C24B31;} .b-slate{background:#EEF0F3; color:#5B6472;} .b-ink{background:#0E1A2B; color:#fff;}
+
+  .btn-primary{background:var(--ink); color:#fff; border-radius:14px; font-weight:600; border:none; width:100%; padding:16px; font-size:15px;}
+  .btn-primary:disabled{background:var(--slate-100); color:var(--slate);}
+  .btn-ghost{background:#F3F1EB; border-radius:14px; font-weight:600; border:none; width:100%; padding:16px; font-size:14px;}
+  .topbar{ display:flex; align-items:center; justify-content:space-between; padding:48px 20px 12px; }
+  .backbtn{ width:36px; height:36px; border-radius:99px; background:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,0.1); font-size:18px; border:none; cursor:pointer; }
+  .card{ background:#fff; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+  .field{ width:100%; background:#fff; border:1px solid var(--slate-100); border-radius:12px; padding:12px 14px; font-size:14px; margin-bottom:10px; }
+  .field:focus{ outline:none; border-color:var(--gold); }
+  .errbox{ background:#FBE7E1; color:#C24B31; border-radius:10px; padding:10px 12px; font-size:12px; margin-top:8px; }
+  .pulse-ring{position:relative;}
+  .pulse-ring::after{content:''; position:absolute; inset:-6px; border-radius:9999px; border:2px solid var(--turf); opacity:0; animation:pr 1.8s ease-out infinite;}
+  @keyframes pr{0%{opacity:.6; transform:scale(.7);} 100%{opacity:0; transform:scale(1.8);}}
+
+  .bottomnav{ position:absolute; left:0; right:0; bottom:0; height:64px; background:#fff; border-top:1px solid var(--slate-100);
+    display:flex; align-items:center; justify-content:space-around; z-index:30; }
+  .bottomnav button{ background:none; border:none; display:flex; flex-direction:column; align-items:center; gap:2px; font-size:10px; font-weight:600; color:var(--slate); }
+  .bottomnav button.active{ color:var(--ink); }
+  .bottomnav .ic{ font-size:18px; }
+
+  .toggle{ position:relative; width:52px; height:30px; border-radius:99px; border:none; cursor:pointer; transition:background .15s; }
+  .toggle.on{ background:var(--turf); } .toggle.off{ background:var(--slate-100); }
+  .toggle .knob{ position:absolute; top:3px; width:24px; height:24px; border-radius:99px; background:#fff; transition:left .15s; box-shadow:0 1px 3px rgba(0,0,0,0.2); }
+  .toggle.on .knob{ left:25px; } .toggle.off .knob{ left:3px; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="notch"></div>
+  <img class="app-logo-badge" src="/logo.png" alt="Karts2Me logo">
+  <div class="screen" id="screen"></div>
+  <div id="bottomnav"></div>
+</div>
+
+<script>
+var SUPABASE_URL = "https://ajmtwylkhmwoistuewox.supabase.co";
+var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqbXR3eWxraG13b2lzdHVld294Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDQzNjEsImV4cCI6MjEwMzU4MDM2MX0.TbUinkDkL9t_N_4NS26OFF8zX6hSawxWufqGRm65rKk";
+var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+var TERMS_VERSION = "2026-08-29";
+var VAPID_PUBLIC_KEY = "BHAJDbP5hpBxwGmcC4L-9EE4ioBEANMtM2WD9I19R7SdaMAlA8Q0-l56Q6enKBO0pgRR_8vjJUSnuLw6UJs33jk";
+
+var vehicleCategories = [
+  { key:"golf_cart", label:"Golf Cart" }, { key:"shuttle_van", label:"Shuttle Van" },
+  { key:"ada_cart", label:"ADA Cart" }, { key:"utility_cart", label:"Utility Cart" },
+];
+
+var state = {
+  screen: "loading", tab: "home",
+  session: null, profile: null, driver: null,
+  authMode: "login", authError: null, termsAgreed: false,
+  approvals: [], applyCategory: "golf_cart", applyError: null,
+  openRides: [], activeRide: null,
+  earningsTotal: 0, earningsCount: 0,
+  pollTimer: null,
+};
+
+function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function catLabel(k){ var f = vehicleCategories.find(function(c){ return c.key===k; }); return f?f.label:k; }
+function go(s){ state.screen = s; render(); }
+
+function urlBase64ToUint8Array(base64String){
+  var padding = '='.repeat((4 - base64String.length % 4) % 4);
+  var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  var rawData = atob(base64);
+  var outputArray = new Uint8Array(rawData.length);
+  for (var i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+async function enablePushNotifications(){
+  if(!("serviceWorker" in navigator) || !("PushManager" in window)) return false;
+  var perm = await Notification.requestPermission();
+  if(perm !== "granted") return false;
+  var reg = await navigator.serviceWorker.ready;
+  var sub = await reg.pushManager.getSubscription();
+  if(!sub){
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+  }
+  var json = sub.toJSON();
+  await sb.from("push_subscriptions").upsert({
+    user_id: state.session.user.id, endpoint: json.endpoint,
+    p256dh: json.keys.p256dh, auth: json.keys.auth,
+  }, { onConflict: "endpoint" });
+  return true;
+}
+
+/* ---------- AUTH ---------- */
+
+function screenAuth(){
+  var isSignup = state.authMode === "signup";
+  return (
+    '<div style="height:100%; display:flex; flex-direction:column; justify-content:center; padding:0 28px;">' +
+      '<div style="text-align:center; margin-bottom:24px;">' +
+        '<img src="/logo.png" style="width:56px; height:56px; border-radius:14px; margin-bottom:12px;">' +
+        '<p class="display" style="font-size:19px; font-weight:600;">' + (isSignup?"Drive with Karts2Me":"Driver login") + '</p>' +
+        '<p style="font-size:13px; color:var(--slate); margin-top:4px;">' + (isSignup?"Apply for a vehicle category to get started":"Log back in to your driver account") + '</p>' +
+      '</div>' +
+      (isSignup ? '<input id="authName" class="field" placeholder="Full name">' : "") +
+      '<input id="authEmail" class="field" placeholder="Email" type="email">' +
+      '<input id="authPassword" class="field" placeholder="Password" type="password">' +
+      (state.authError ? '<div class="errbox">'+esc(state.authError)+'</div>' : "") +
+      '<button id="authSubmit" class="btn-primary" style="margin-top:6px;">' + (isSignup?"Sign up":"Log in") + '</button>' +
+      '<button id="authToggle" style="background:none; border:none; margin-top:14px; font-size:13px; color:var(--slate); text-decoration:underline;">' +
+        (isSignup ? "Already driving? Log in" : "New driver? Create an account") + '</button>' +
+    '</div>'
+  );
+}
+
+/* ---------- TERMS ---------- */
+
+function screenTerms(){
+  return (
+    '<div style="height:100%; display:flex; flex-direction:column;">' +
+      '<div style="padding:48px 20px 16px;">' +
+        '<p class="display" style="font-size:19px; font-weight:600;">Before you drive</p>' +
+        '<p style="font-size:13px; color:var(--slate); line-height:1.5; margin-top:6px;">Please review and accept the Karts2Me Terms of Service to continue.</p>' +
+      '</div>' +
+      '<div style="flex:1; overflow-y:auto; padding:0 20px;">' +
+        '<div class="card" style="padding:16px; margin-bottom:12px;">' +
+          '<p style="font-size:13px; font-weight:600; margin-bottom:6px;">Independent Contractor &amp; Arbitration</p>' +
+          '<p style="font-size:12px; color:var(--slate); line-height:1.5;">As a gig driver you are an independent contractor, not a Karts2Me employee. Disputes are resolved through individual binding arbitration, not in court or as a class action. You may opt out within 30 days.</p>' +
+        '</div>' +
+        '<div class="card" style="padding:16px; margin-bottom:12px; border:1px solid var(--coral);">' +
+          '<p style="font-size:13px; font-weight:600; margin-bottom:6px; color:var(--coral);">Insurance &amp; Liability</p>' +
+          '<p style="font-size:12px; color:var(--slate); line-height:1.5;">You are solely responsible for maintaining insurance meeting your the minimum for your category. Karts2Me is a technology platform, not a transportation carrier, and is not liable for injury or damage arising from a ride except its own gross negligence or willful misconduct.</p>' +
+        '</div>' +
+      '</div>' +
+      '<div style="padding:16px 20px 8px;">' +
+        '<label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer;">' +
+          '<input type="checkbox" id="agreeCheckbox" style="width:20px; height:20px; margin-top:1px; flex-shrink:0;" ' + (state.termsAgreed?"checked":"") + '>' +
+          '<span style="font-size:13px; line-height:1.4;">I have read and agree to the <b>Karts2Me Terms of Service</b>.</span>' +
+        '</label>' +
+      '</div>' +
+      '<div style="padding:12px 20px 32px;"><button id="continueBtn" class="btn-primary" ' + (state.termsAgreed?"":"disabled") + '>Agree &amp; continue</button></div>' +
+    '</div>'
+  );
+}
+
+/* ---------- CATEGORY APPLICATION ---------- */
+
+function screenApply(){
+  return (
+    '<div class="topbar"><div style="width:36px;"></div><p class="display" style="font-weight:600; font-size:15px;">Apply for a category</p><div style="width:36px;"></div></div>' +
+    '<div style="padding:0 20px;">' +
+      '<p style="font-size:13px; color:var(--slate); margin-bottom:16px; line-height:1.5;">This approval works across every Karts2Me operator, not just one property. A platform reviewer checks your license, insurance, and background check before you can go online.</p>' +
+      '<label style="display:block; font-size:11px; font-weight:600; text-transform:uppercase; color:var(--slate); margin-bottom:6px;">Vehicle category</label>' +
+      '<select id="applyCategory" class="field">' +
+        vehicleCategories.map(function(c){ return '<option value="'+c.key+'" '+(c.key===state.applyCategory?"selected":"")+'>'+c.label+'</option>'; }).join("") +
+      '</select>' +
+      '<input id="applyLicense" class="field" placeholder="License doc URL or reference (placeholder)">' +
+      '<input id="applyInsurance" class="field" placeholder="Insurance doc URL or reference (placeholder)">' +
+      (state.applyError ? '<div class="errbox">'+esc(state.applyError)+'</div>' : "") +
+      '<button id="applySubmit" class="btn-primary" style="margin-top:6px;">Submit application</button>' +
+      (state.approvals.length>0 ? '<button id="skipToStatus" style="background:none; border:none; margin-top:14px; font-size:13px; color:var(--slate); text-decoration:underline; display:block; width:100%; text-align:center;">Back to my applications</button>' : "") +
+    '</div>'
+  );
+}
+
+/* ---------- STATUS ---------- */
+
+function screenStatus(){
+  var hasApproved = state.approvals.some(function(a){ return a.status==="approved"; });
+  var rows = state.approvals.map(function(a){
+    var tone = a.status==="approved" ? "b-turf" : a.status==="rejected" ? "b-coral" : "b-gold";
+    return (
+      '<div class="card" style="padding:16px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between;">' +
+        '<div><p style="font-size:14px; font-weight:600;">'+catLabel(a.category)+'</p>' +
+        '<p style="font-size:12px; color:var(--slate); margin-top:2px;">Applied '+ new Date(a.created_at).toLocaleDateString() +'</p></div>' +
+        '<span class="badge '+tone+'">'+a.status+'</span></div>'
+    );
+  }).join("");
+  return (
+    '<div class="topbar"><div style="width:36px;"></div><p class="display" style="font-weight:600; font-size:15px;">Your applications</p><div style="width:36px;"></div></div>' +
+    '<div style="padding:0 20px;">' +
+      (rows || '<p style="font-size:13px; color:var(--slate); text-align:center; padding:20px;">No applications yet.</p>') +
+      '<button id="applyMore" class="btn-ghost" style="margin-top:8px;">+ Apply for another category</button>' +
+    '</div>' +
+    '<div style="padding:16px 20px 32px;">' +
+      (hasApproved ? '<button id="goHome" class="btn-primary">Continue to driver home</button>' :
+        '<p style="font-size:12px; color:var(--slate); text-align:center;">You will be notified here once a platform admin approves a category.</p>') +
+    '</div>'
+  );
+}
+
+/* ---------- HOME ---------- */
+
+function screenHome(){
+  var d = state.driver;
+  return (
+    '<div style="padding-bottom:24px;">' +
+      '<div style="display:flex; align-items:center; justify-content:space-between; padding:48px 20px 4px;">' +
+        '<div><p class="mono" style="font-size:12px; color:var(--slate);">Welcome back</p><p class="display" style="font-size:20px; font-weight:600;">'+esc(state.profile.full_name||"Driver")+'</p></div>' +
+        '<button id="logoutBtn" style="width:36px; height:36px; border-radius:99px; background:var(--ink); color:#fff; border:none; font-size:14px;">&#9099;</button>' +
+      '</div>' +
+      (Notification && Notification.permission!=="granted" ? '<div class="card" style="margin:20px 20px 0; padding:16px; background:#FBF0DC; box-shadow:none;">' +
+        '<p style="font-size:13px; font-weight:600;">Get notified about new rides</p>' +
+        '<p style="font-size:12px; color:var(--slate); margin-top:2px; margin-bottom:10px;">Push alerts work even when the app is closed.</p>' +
+        '<button id="enablePushBtn" class="btn-ghost" style="padding:10px;">Enable notifications</button></div>' : "") +
+      '<div class="card" style="margin:20px; padding:20px; display:flex; align-items:center; justify-content:space-between;">' +
+        '<div><p style="font-size:14px; font-weight:600;">'+(d.is_online?"You're online":"You're offline")+'</p>' +
+        '<p style="font-size:12px; color:var(--slate); margin-top:2px;">'+(d.is_online?"Visible for open ride requests":"Go online to start accepting rides")+'</p></div>' +
+        '<button id="onlineToggle" class="toggle '+(d.is_online?"on":"off")+'"><span class="knob"></span></button>' +
+      '</div>' +
+      '<div style="padding:0 20px; display:flex; gap:12px;">' +
+        '<div class="card" style="flex:1; padding:16px;"><p class="mono" style="font-size:11px; color:var(--slate); text-transform:uppercase;">Rides done</p><p class="display" style="font-size:24px; font-weight:600; margin-top:4px;">'+state.earningsCount+'</p></div>' +
+        '<div class="card" style="flex:1; padding:16px;"><p class="mono" style="font-size:11px; color:var(--slate); text-transform:uppercase;">Total earned</p><p class="display" style="font-size:24px; font-weight:600; margin-top:4px;">$'+(state.earningsTotal/100).toFixed(2)+'</p></div>' +
+      '</div>' +
+      '<div style="padding:0 20px; margin-top:16px;">' +
+        '<p style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate); margin-bottom:8px;">Category approvals</p>' +
+        '<div class="chip-row" style="display:flex; gap:6px; flex-wrap:wrap;">' +
+          state.approvals.filter(function(a){return a.status==="approved";}).map(function(a){ return '<span class="badge b-turf">'+catLabel(a.category)+'</span>'; }).join("") +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+/* ---------- OPEN RIDES ---------- */
+
+function screenRides(){
+  var rows = state.openRides.map(function(r){
+    return (
+      '<div class="card" style="padding:16px; margin-bottom:10px;">' +
+        '<div style="display:flex; justify-content:space-between; align-items:flex-start;">' +
+          '<div><p style="font-size:14px; font-weight:600;">To '+esc(r.dropoff_label||"—")+'</p>' +
+          '<p style="font-size:12px; color:var(--slate); margin-top:2px;">'+r.seats_requested+' seat(s) &middot; '+(r.is_buyout?"Buyout":"Shared")+'</p></div>' +
+          '<p class="mono" style="font-size:16px; font-weight:600;">$'+(r.fare_cents/100).toFixed(2)+'</p>' +
+        '</div>' +
+        '<button class="btn-primary accept-btn" data-id="'+r.id+'" style="margin-top:12px; padding:10px;">Accept ride</button>' +
+      '</div>'
+    );
+  }).join("");
+  return (
+    '<div class="topbar"><p class="display" style="font-weight:600; font-size:18px;">Open rides</p><button id="refreshRides" style="background:none; border:none; font-size:12px; color:var(--slate); text-decoration:underline;">Refresh</button></div>' +
+    '<div style="padding:0 20px;">' +
+      (state.openRides.length ? rows : '<p style="font-size:13px; color:var(--slate); text-align:center; padding:30px 10px;">No open ride requests right now.</p>') +
+    '</div>'
+  );
+}
+
+/* ---------- ACTIVE RIDE ---------- */
+
+function screenActive(){
+  var r = state.activeRide;
+  var isInProgress = r.status === "in_progress";
+  return (
+    '<div class="topbar"><div style="width:36px;"></div><p class="display" style="font-weight:600; font-size:15px;">Active ride</p><div style="width:36px;"></div></div>' +
+    '<div style="padding:0 20px;">' +
+      '<div class="card" style="padding:20px;">' +
+        '<span class="badge '+(isInProgress?"b-turf":"b-gold")+'">'+r.status.replace("_"," ")+'</span>' +
+        '<p class="display" style="font-size:18px; font-weight:600; margin-top:12px;">To '+esc(r.dropoff_label||"—")+'</p>' +
+        '<p style="font-size:13px; color:var(--slate); margin-top:4px;">'+r.seats_requested+' seat(s) &middot; $'+(r.fare_cents/100).toFixed(2)+' fare</p>' +
+        '<p style="font-size:12px; color:var(--slate); margin-top:10px;" class="mono">ride #'+r.id.slice(0,8)+'</p>' +
+      '</div>' +
+    '</div>' +
+    '<div style="padding:16px 20px 32px;">' +
+      (isInProgress
+        ? '<button id="completeRideBtn" class="btn-primary">Complete ride</button>'
+        : '<button id="startRideBtn" class="btn-primary">Start ride</button>') +
+    '</div>'
+  );
+}
+
+/* ---------- EARNINGS ---------- */
+
+function screenEarnings(){
+  return (
+    '<div class="topbar"><p class="display" style="font-weight:600; font-size:18px;">Earnings</p><div style="width:36px;"></div></div>' +
+    '<div style="padding:0 20px;">' +
+      '<div class="card" style="padding:20px; background:var(--ink); margin-bottom:16px;">' +
+        '<p class="mono" style="font-size:11px; text-transform:uppercase; color:var(--gold);">Total earned</p>' +
+        '<p class="display" style="font-size:32px; font-weight:600; color:#fff; margin-top:6px;">$'+(state.earningsTotal/100).toFixed(2)+'</p>' +
+        '<p style="font-size:12px; color:rgba(255,255,255,0.6); margin-top:4px;">'+state.earningsCount+' completed rides</p>' +
+      '</div>' +
+      '<div style="font-size:12px; color:var(--slate); padding:0 4px; line-height:1.5;">Shown as gross fare per ride. Platform fee deduction and payout scheduling are handled operator-side and not yet itemized here.</div>' +
+    '</div>'
+  );
+}
+
+function screenLoading(){ return '<div style="height:100%; display:flex; align-items:center; justify-content:center;"><p class="mono" style="font-size:12px; color:var(--slate);">Loading&hellip;</p></div>'; }
+
+/* ---------- DATA ---------- */
+
+async function loadApprovals(){
+  var res = await sb.from("category_approvals").select("*").eq("driver_id", state.session.user.id).order("created_at", { ascending:false });
+  state.approvals = res.data || [];
+}
+
+async function loadOpenRides(){
+  var res = await sb.from("rides").select("*").is("driver_id", null).eq("status", "requested").order("requested_at", { ascending:true });
+  state.openRides = res.data || [];
+}
+
+async function loadEarnings(){
+  var res = await sb.from("rides").select("fare_cents").eq("driver_id", state.session.user.id).eq("status", "completed");
+  var rows = res.data || [];
+  state.earningsCount = rows.length;
+  state.earningsTotal = rows.reduce(function(a,r){ return a + (r.fare_cents||0); }, 0);
+}
+
+async function checkActiveRide(){
+  var res = await sb.from("rides").select("*").eq("driver_id", state.session.user.id).in("status", ["assigned","in_progress"]).order("requested_at", { ascending:false }).limit(1).maybeSingle();
+  state.activeRide = res.data || null;
+}
+
+/* ---------- BOTTOM NAV ---------- */
+
+function renderBottomNav(){
+  var el = document.getElementById("bottomnav");
+  if(!["home","rides","earnings"].includes(state.tab) || state.screen!=="app"){ el.innerHTML=""; return; }
+  el.innerHTML = (
+    '<div class="bottomnav">' +
+      '<button class="navbtn '+(state.tab==="home"?"active":"")+'" data-tab="home"><span class="ic">&#8962;</span>Home</button>' +
+      '<button class="navbtn '+(state.tab==="rides"?"active":"")+'" data-tab="rides"><span class="ic">&#128663;</span>Rides</button>' +
+      '<button class="navbtn '+(state.tab==="earnings"?"active":"")+'" data-tab="earnings"><span class="ic">&#128176;</span>Earnings</button>' +
+    '</div>'
+  );
+  document.querySelectorAll(".navbtn").forEach(function(btn){
+    btn.onclick = async function(){ state.tab = btn.dataset.tab; await refreshTabData(); render(); };
+  });
+}
+
+async function refreshTabData(){
+  await checkActiveRide();
+  if(state.activeRide){ return; }
+  if(state.tab==="rides") await loadOpenRides();
+  if(state.tab==="earnings") await loadEarnings();
+  if(state.tab==="home") await loadEarnings();
+}
+
+/* ---------- RENDER + BIND ---------- */
+
+function render(){
+  var screenEl = document.getElementById("screen");
+  if(state.screen==="loading"){ screenEl.className="screen full"; screenEl.innerHTML = screenLoading(); renderBottomNav(); return; }
+  if(state.screen==="auth"){ screenEl.className="screen full"; screenEl.innerHTML = screenAuth(); bindAuth(); renderBottomNav(); return; }
+  if(state.screen==="terms"){ screenEl.className="screen full"; screenEl.innerHTML = screenTerms(); bindTerms(); renderBottomNav(); return; }
+  if(state.screen==="apply"){ screenEl.className="screen full"; screenEl.innerHTML = screenApply(); bindApply(); renderBottomNav(); return; }
+  if(state.screen==="status"){ screenEl.className="screen full"; screenEl.innerHTML = screenStatus(); bindStatus(); renderBottomNav(); return; }
+
+  screenEl.className = "screen";
+  if(state.activeRide){
+    screenEl.innerHTML = screenActive(); bindActive();
+  } else if(state.tab==="home"){
+    screenEl.innerHTML = screenHome(); bindHome();
+  } else if(state.tab==="rides"){
+    screenEl.innerHTML = screenRides(); bindRides();
+  } else if(state.tab==="earnings"){
+    screenEl.innerHTML = screenEarnings();
+  }
+  renderBottomNav();
+}
+
+function bindAuth(){
+  document.getElementById("authToggle").onclick = function(){ state.authMode = state.authMode==="login"?"signup":"login"; state.authError=null; render(); };
+  document.getElementById("authSubmit").onclick = async function(){
+    var email = document.getElementById("authEmail").value.trim();
+    var password = document.getElementById("authPassword").value;
+    var res;
+    if(state.authMode==="signup"){
+      var name = document.getElementById("authName").value.trim();
+      res = await sb.auth.signUp({ email:email, password:password, options:{ data:{ full_name:name, role:"driver" } } });
+    } else {
+      res = await sb.auth.signInWithPassword({ email:email, password:password });
+    }
+    if(res.error){ state.authError = res.error.message; render(); return; }
+    state.session = res.data.session;
+    await afterAuth();
+  };
+}
+
+function bindTerms(){
+  document.getElementById("agreeCheckbox").onchange = function(e){ state.termsAgreed = e.target.checked; render(); };
+  document.getElementById("continueBtn").onclick = async function(){
+    if(!state.termsAgreed) return;
+    await sb.from("profiles").update({ terms_accepted_at: new Date().toISOString(), terms_version: TERMS_VERSION }).eq("id", state.session.user.id);
+    await ensureDriverRow();
+    await loadApprovals();
+    go(state.approvals.length ? "status" : "apply");
+  };
+}
+
+function bindApply(){
+  document.getElementById("applyCategory").onchange = function(e){ state.applyCategory = e.target.value; };
+  var skip = document.getElementById("skipToStatus");
+  if(skip) skip.onclick = function(){ go("status"); };
+  document.getElementById("applySubmit").onclick = async function(){
+    var cat = document.getElementById("applyCategory").value;
+    var lic = document.getElementById("applyLicense").value.trim();
+    var ins = document.getElementById("applyInsurance").value.trim();
+    var res = await sb.from("category_approvals").insert({
+      driver_id: state.session.user.id, category: cat,
+      license_doc_url: lic || null, insurance_doc_url: ins || null, status: "pending",
+    });
+    if(res.error){ state.applyError = res.error.message; render(); return; }
+    await loadApprovals();
+    go("status");
+  };
+}
+
+function bindStatus(){
+  document.getElementById("applyMore").onclick = function(){ go("apply"); };
+  var goHomeBtn = document.getElementById("goHome");
+  if(goHomeBtn) goHomeBtn.onclick = async function(){
+    state.tab = "home"; state.screen = "app";
+    await loadEarnings(); await checkActiveRide();
+    render();
+  };
+}
+
+function bindHome(){
+  document.getElementById("logoutBtn").onclick = async function(){ await sb.auth.signOut(); location.reload(); };
+  var pushBtn = document.getElementById("enablePushBtn");
+  if(pushBtn) pushBtn.onclick = async function(){
+    var ok = await enablePushNotifications();
+    if(ok) render();
+  };
+  document.getElementById("onlineToggle").onclick = async function(){
+    var newVal = !state.driver.is_online;
+    await sb.from("drivers").update({ is_online: newVal }).eq("id", state.session.user.id);
+    state.driver.is_online = newVal;
+    render();
+  };
+}
+
+function bindRides(){
+  document.getElementById("refreshRides").onclick = async function(){ await loadOpenRides(); render(); };
+  document.querySelectorAll(".accept-btn").forEach(function(btn){
+    btn.onclick = async function(){
+      var res = await sb.from("rides").update({ driver_id: state.session.user.id, status: "assigned" }).eq("id", btn.dataset.id).select().single();
+      if(res.error){ alert("Could not accept — it may have just been claimed by another driver."); await loadOpenRides(); render(); return; }
+      fetch(SUPABASE_URL + "/functions/v1/notify-ride-accepted", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.session.access_token, "apikey": SUPABASE_ANON_KEY },
+        body: JSON.stringify({ ride_id: btn.dataset.id }),
+      }).catch(function(){ /* notification failure shouldn't block the ride */ });
+      await checkActiveRide();
+      render();
+    };
+  });
+}
+
+function bindActive(){
+  var startBtn = document.getElementById("startRideBtn");
+  if(startBtn) startBtn.onclick = async function(){
+    await sb.from("rides").update({ status:"in_progress" }).eq("id", state.activeRide.id);
+    await checkActiveRide(); render();
+  };
+  var completeBtn = document.getElementById("completeRideBtn");
+  if(completeBtn) completeBtn.onclick = async function(){
+    await sb.from("rides").update({ status:"completed", completed_at:new Date().toISOString() }).eq("id", state.activeRide.id);
+    state.activeRide = null;
+    await loadEarnings();
+    render();
+  };
+}
+
+/* ---------- BOOTSTRAP ---------- */
+
+async function ensureDriverRow(){
+  var res = await sb.from("drivers").select("*").eq("id", state.session.user.id).maybeSingle();
+  if(!res.data){
+    var ins = await sb.from("drivers").insert({ id: state.session.user.id, employment_type:"gig" }).select().single();
+    state.driver = ins.data;
+  } else {
+    state.driver = res.data;
+  }
+}
+
+async function afterAuth(){
+  var profRes = await sb.from("profiles").select("*").eq("id", state.session.user.id).single();
+  state.profile = profRes.data;
+  if(!profRes.data.terms_accepted_at){ go("terms"); return; }
+  await ensureDriverRow();
+  await loadApprovals();
+  var hasApproved = state.approvals.some(function(a){ return a.status==="approved"; });
+  if(!hasApproved){ go(state.approvals.length ? "status" : "apply"); return; }
+  state.tab = "home"; state.screen = "app";
+  await loadEarnings(); await checkActiveRide();
+  render();
+}
+
+async function boot(){
+  var sess = await sb.auth.getSession();
+  state.session = sess.data.session;
+  if(state.session){ await afterAuth(); }
+  else { go("auth"); }
+}
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
+}
+
+boot();
+</script>
+</body>
+</html>

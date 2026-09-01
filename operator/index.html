@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Karts2Me — Operator Dashboard</title>
+<link rel="apple-touch-icon" href="/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --ink:#0E1A2B; --ink-2:#16263D; --cream:#FAF7F0; --card:#FFFFFF;
+    --gold:#E8A83C; --coral:#E85D3F; --turf:#3D7A4D; --slate:#64748B; --slate-100:#E7E9ED;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0; background:var(--cream); font-family:'Inter',sans-serif; color:var(--ink);}
+  h1,h2,h3,p{margin:0;}
+  button,select,input{font-family:inherit;}
+  .display{font-family:'Space Grotesk',sans-serif;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+
+  .authwrap{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .authbox{ width:100%; max-width:360px; background:#fff; border-radius:20px; padding:32px; box-shadow:0 8px 30px rgba(14,26,43,0.12); }
+  .field{ width:100%; background:#fff; border:1px solid var(--slate-100); border-radius:10px; padding:10px 14px; font-size:14px; margin-bottom:10px; }
+  .field:focus{ outline:none; border-color:var(--gold); }
+  .errbox{ background:#FBE7E1; color:#C24B31; border-radius:10px; padding:10px 12px; font-size:12px; margin-bottom:10px; }
+  .btn{ border:none; border-radius:10px; font-weight:600; cursor:pointer; padding:10px 18px; font-size:14px; }
+  .btn-primary{ background:var(--ink); color:#fff; width:100%; padding:12px; }
+  .btn-ghost{ background:transparent; border:1px solid var(--slate-100); color:var(--ink); }
+
+  .app{display:flex; min-height:100vh;}
+  .sidebar{width:230px; flex-shrink:0; background:var(--ink); padding:16px; display:flex; flex-direction:column;}
+  .main{flex:1; padding:32px; max-width:1000px;}
+  .logo-row{display:flex; align-items:center; gap:10px; padding:8px; margin-bottom:24px;}
+  .logo-mark{width:36px; height:36px; border-radius:10px; object-fit:cover; flex-shrink:0; box-shadow:0 0 0 1px rgba(255,255,255,0.08);}
+  .logo-text .t1{color:#fff; font-weight:700; font-size:15px; letter-spacing:-0.02em;}
+  .logo-text .t2{color:var(--gold); font-size:9px; letter-spacing:0.2em; text-transform:uppercase;}
+  .nav{flex:1; display:flex; flex-direction:column; gap:4px;}
+  .nav-item{text-align:left; background:transparent; border:none; border-left:2px solid transparent; color:rgba(255,255,255,0.65);
+    padding:10px 12px; border-radius:8px; font-size:14px; font-weight:500; cursor:pointer;}
+  .nav-item:hover{background:rgba(255,255,255,0.04);}
+  .nav-item.active{background:rgba(232,168,60,0.12); color:#fff; border-left-color:var(--gold);}
+  .op-card{padding:12px; border-radius:12px; background:rgba(255,255,255,0.05);}
+  .op-card .name{color:#fff; font-size:14px; font-weight:600;}
+  .op-card button{margin-top:8px; width:100%; background:rgba(255,255,255,0.08); color:#fff; border:none; border-radius:8px; padding:6px; font-size:12px; cursor:pointer;}
+
+  .badge{display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; padding:3px 12px 3px 9px;
+    clip-path: polygon(8% 0, 92% 0, 100% 50%, 92% 100%, 8% 100%, 0 50%);}
+  .b-turf{background:#E7F3E9; color:#3D7A4D;} .b-gold{background:#FBF0DC; color:#B87A16;}
+  .b-coral{background:#FBE7E1; color:#C24B31;} .b-slate{background:#EEF0F3; color:#5B6472;} .b-ink{background:#0E1A2B; color:#fff;}
+
+  .section-head{display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:24px; gap:16px; flex-wrap:wrap;}
+  .section-head h2{font-size:24px; font-weight:600;}
+  .section-head p{font-size:14px; color:var(--slate); margin-top:4px;}
+  .card{background:#fff; border-radius:16px; box-shadow:0 1px 2px rgba(14,26,43,0.04), 0 8px 24px -12px rgba(14,26,43,0.10);}
+  .stat-row{display:flex; gap:16px; flex-wrap:wrap; margin-bottom:24px;}
+  .stat{flex:1; min-width:160px; padding:20px;}
+  .stat .label{font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate);}
+  .stat .value{font-size:30px; font-weight:600; margin-top:6px;}
+  .stat .sub{font-size:12px; color:var(--slate); margin-top:4px;}
+
+  table{width:100%; border-collapse:collapse; font-size:14px;}
+  th{text-align:left; padding:12px 20px; font-family:'IBM Plex Mono',monospace; font-size:11px; text-transform:uppercase;
+    letter-spacing:0.03em; color:var(--slate); border-bottom:1px solid var(--slate-100);}
+  td{padding:16px 20px; border-bottom:1px solid var(--slate-100);}
+  tr:last-child td{border-bottom:none;}
+
+  .field-label{display:block; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.03em; color:var(--slate); margin-bottom:6px;}
+  .modal-backdrop{position:fixed; inset:0; background:rgba(14,26,43,0.55); display:flex; align-items:center; justify-content:center; padding:16px; z-index:100;}
+  .modal{background:#fff; border-radius:16px; width:100%; max-width:560px; max-height:85vh; overflow-y:auto;}
+  .modal-head{display:flex; align-items:center; justify-content:space-between; padding:20px 24px 16px; border-bottom:1px solid var(--slate-100);}
+  .modal-close{background:none; border:none; font-size:22px; color:var(--slate); cursor:pointer; line-height:1;}
+  .modal-body{padding:24px;}
+  .hidden{display:none !important;}
+  .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  .fleet-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  .fleet-card{padding:20px; display:flex; align-items:center; justify-content:space-between;}
+  .event-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  .event-card{padding:20px;}
+  .matrix{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .matrix-cell{text-align:left; padding:14px; border-radius:12px; border:2px solid var(--slate-100); background:#fff; cursor:pointer;}
+  .matrix-cell.active{border-color:var(--gold); background:#FBF0DC;}
+  .matrix-cell .t{font-size:14px; font-weight:600;}
+  .matrix-cell .d{font-size:12px; color:var(--slate); margin-top:4px;}
+  .avatar{width:32px; height:32px; border-radius:99px; background:var(--ink); color:#fff; display:flex; align-items:center;
+    justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; flex-shrink:0;}
+  .driver-row{display:flex; align-items:center; gap:10px;}
+  .chip-row{display:flex; gap:6px; flex-wrap:wrap;}
+  .demo-banner{ background:#FBF0DC; border:1px solid #E8A83C; border-radius:10px; padding:10px 14px; font-size:12px; margin-bottom:20px; }
+
+  @media (max-width:760px){
+    .app{flex-direction:column;}
+    .sidebar{width:100%; flex-direction:row; align-items:center; overflow-x:auto; padding:12px;}
+    .logo-row{margin-bottom:0; margin-right:12px;}
+    .nav{flex-direction:row;}
+    .nav-item{white-space:nowrap;}
+    .op-card{display:none;}
+    .main{padding:20px;}
+    .grid-2, .fleet-grid, .event-grid, .matrix{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div class="modal-backdrop hidden" id="modalBackdrop"><div class="modal" id="modal"></div></div>
+
+<script>
+var SUPABASE_URL = "https://ajmtwylkhmwoistuewox.supabase.co";
+var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqbXR3eWxraG13b2lzdHVld294Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDQzNjEsImV4cCI6MjEwMzU4MDM2MX0.TbUinkDkL9t_N_4NS26OFF8zX6hSawxWufqGRm65rKk";
+var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+var DEMO_OPERATOR_ID = "00000000-0000-0000-0000-000000000001";
+
+var vehicleCategories = [
+  { key:"golf_cart", label:"Golf Cart" }, { key:"shuttle_van", label:"Shuttle Van" },
+  { key:"ada_cart", label:"ADA Cart" }, { key:"utility_cart", label:"Utility Cart" },
+];
+
+var state = {
+  screen: "loading", authMode: "login", authError: null, session: null, profile: null, operator: null,
+  tab: "overview", zones: [], vehicleTypes: [], events: [], approvedDrivers: [], pricing: null,
+  eventDraft: null,
+};
+
+function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function catLabel(key){ var f = vehicleCategories.find(function(c){ return c.key===key; }); return f ? f.label : key; }
+
+/* ---------- AUTH ---------- */
+
+function screenAuth(){
+  var isSignup = state.authMode === "signup";
+  return (
+    '<div class="authwrap"><div class="authbox">' +
+      '<div style="text-align:center; margin-bottom:20px;"><img src="/logo.png" style="width:48px; height:48px; border-radius:12px; margin-bottom:10px;">' +
+      '<p class="display" style="font-size:18px; font-weight:600;">' + (isSignup?"Create operator account":"Operator login") + '</p></div>' +
+      (isSignup ? '<input id="authName" class="field" placeholder="Full name">' : "") +
+      '<input id="authEmail" class="field" placeholder="Email" type="email">' +
+      '<input id="authPassword" class="field" placeholder="Password" type="password">' +
+      (state.authError ? '<div class="errbox">' + esc(state.authError) + '</div>' : "") +
+      '<button id="authSubmit" class="btn btn-primary">' + (isSignup?"Sign up":"Log in") + '</button>' +
+      '<button id="authToggle" style="background:none; border:none; margin-top:12px; font-size:12px; color:var(--slate); text-decoration:underline; display:block; width:100%; text-align:center;">' +
+        (isSignup ? "Already have an account? Log in" : "New operator? Create account") + '</button>' +
+    '</div></div>'
+  );
+}
+
+/* ---------- DATA LOADING ---------- */
+
+async function loadOperatorData(){
+  var opId = state.profile.operator_id;
+  var opRes = await sb.from("operators").select("*").eq("id", opId).single();
+  state.operator = opRes.data;
+
+  var zonesRes = await sb.from("zones").select("*").eq("operator_id", opId);
+  state.zones = zonesRes.data || [];
+
+  var vtRes = await sb.from("vehicle_types").select("*").eq("operator_id", opId);
+  state.vehicleTypes = vtRes.data || [];
+
+  var evRes = await sb.from("events").select("*").eq("operator_id", opId).order("created_at", { ascending:false });
+  state.events = evRes.data || [];
+
+  var drRes = await sb.from("category_approvals").select("*, drivers(id, employment_type, profiles(full_name))").eq("status", "approved");
+  state.approvedDrivers = drRes.data || [];
+
+  var prRes = await sb.from("operator_pricing").select("*").eq("operator_id", opId).maybeSingle();
+  if(!prRes.data){
+    var insertRes = await sb.from("operator_pricing").insert({ operator_id: opId }).select().single();
+    state.pricing = insertRes.data;
+  } else {
+    state.pricing = prRes.data;
+  }
+}
+
+/* ---------- SHELL ---------- */
+
+function sectionHead(title, desc, actionHtml){
+  return '<div class="section-head"><div><h2 class="display">' + title + '</h2><p>' + desc + '</p></div>' + (actionHtml||"") + '</div>';
+}
+
+var NAV = [["overview","Overview"],["zones","Zones"],["fleet","Fleet"],["events","Events"],["drivers","Drivers"],["pricing","Pricing"],["branding","Branding"]];
+
+function renderShell(){
+  var navHtml = NAV.map(function(pair){
+    return '<button class="nav-item ' + (state.tab===pair[0]?"active":"") + '" data-tab="' + pair[0] + '">' + pair[1] + '</button>';
+  }).join("");
+  document.getElementById("root").innerHTML = (
+    '<div class="app">' +
+      '<aside class="sidebar">' +
+        '<div class="logo-row"><img class="logo-mark" src="/logo.png"><div class="logo-text"><div class="t1">KARTS2ME</div><div class="t2">Mini Transit</div></div></div>' +
+        '<nav class="nav">' + navHtml + '</nav>' +
+        '<div class="op-card"><div class="name">' + esc(state.operator.display_name) + '</div>' +
+          '<span class="badge ' + (state.operator.verified?"b-turf":"b-coral") + '">' + (state.operator.verified?"Verified":"Pending review") + '</span>' +
+          '<button id="logoutBtn">Log out</button></div>' +
+      '</aside>' +
+      '<main class="main" id="main"></main>' +
+    '</div>'
+  );
+  document.querySelectorAll(".nav-item").forEach(function(btn){ btn.onclick = function(){ state.tab = btn.dataset.tab; render(); }; });
+  document.getElementById("logoutBtn").onclick = async function(){ await sb.auth.signOut(); location.reload(); };
+}
+
+/* ---------- OVERVIEW ---------- */
+
+function renderOverview(){
+  var totalVehicles = state.vehicleTypes.reduce(function(a,v){ return a + (v.capacity?1:1); }, 0);
+  return (
+    sectionHead("Overview", "Live snapshot of " + esc(state.operator.display_name) + ".") +
+    '<div class="demo-banner">This dashboard is wired to a real Supabase database. All zones, events, and pricing you create here are actually persisted.</div>' +
+    '<div class="stat-row">' +
+      '<div class="card stat"><div class="label">Zones</div><div class="value">' + state.zones.length + '</div></div>' +
+      '<div class="card stat"><div class="label">Vehicle types</div><div class="value">' + state.vehicleTypes.length + '</div></div>' +
+      '<div class="card stat"><div class="label">Events</div><div class="value">' + state.events.length + '</div></div>' +
+      '<div class="card stat"><div class="label">Platform fee</div><div class="value">' + state.operator.platform_fee_percent + '%</div></div>' +
+    '</div>'
+  );
+}
+
+/* ---------- ZONES ---------- */
+
+function renderZones(){
+  var rows = state.zones.map(function(z){
+    return (
+      '<tr><td>' + esc(z.name) + '</td><td style="color:var(--slate); text-transform:capitalize;">' + (z.road_type||"").replace("_"," ") + '</td>' +
+      '<td class="mono">' + (z.speed_limit_mph||"—") + ' mph</td>' +
+      '<td><div class="chip-row">' + (z.enabled_modes||[]).map(function(m){ return '<span class="badge b-slate">' + m.replace("_"," ") + '</span>'; }).join("") + '</div></td>' +
+      '<td><span class="badge ' + (z.active?"b-turf":"b-slate") + '">' + (z.active?"Active":"Inactive") + '</span></td></tr>'
+    );
+  }).join("");
+  return (
+    sectionHead("Zones", "Real zones stored in your operator's Supabase record.",
+      '<button class="btn btn-primary" id="btnNewZone" style="width:auto;">+ New zone</button>') +
+    '<div class="card" style="overflow-x:auto;"><table><thead><tr><th>Zone</th><th>Road type</th><th>Speed limit</th><th>Modes</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+  );
+}
+
+function openNewZoneModal(){
+  openModal(
+    '<div class="modal-head"><h3 class="display">New zone</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
+    '<div class="modal-body">' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Zone name</span><input class="field" id="nzName" placeholder="e.g. Poolside Loop"></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Road type</span><select class="field" id="nzRoadType"><option value="cart_path">Cart path</option><option value="shared_road">Shared road</option><option value="mixed">Mixed</option></select></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Speed limit (mph)</span><input type="number" class="field" id="nzSpeed" value="15"></label>' +
+      '<div style="display:flex; justify-content:flex-end; gap:10px;"><button class="btn btn-ghost" id="nzCancel">Cancel</button><button class="btn btn-primary" style="width:auto;" id="nzCreate">Create zone</button></div>' +
+    '</div>'
+  );
+  document.getElementById("modalCloseBtn").onclick = closeModal;
+  document.getElementById("nzCancel").onclick = closeModal;
+  document.getElementById("nzCreate").onclick = async function(){
+    var name = document.getElementById("nzName").value.trim();
+    if(!name) return;
+    await sb.from("zones").insert({
+      operator_id: state.profile.operator_id, name: name,
+      road_type: document.getElementById("nzRoadType").value,
+      speed_limit_mph: Number(document.getElementById("nzSpeed").value),
+      enabled_modes: ["on_demand"], active: true,
+    });
+    closeModal(); await loadOperatorData(); render();
+  };
+}
+
+/* ---------- FLEET ---------- */
+
+function renderFleet(){
+  var cards = state.vehicleTypes.map(function(vt){
+    return (
+      '<div class="card fleet-card"><div><span class="badge b-ink">' + catLabel(vt.category) + '</span>' +
+        '<p class="display" style="font-weight:600; font-size:18px; margin-top:10px;">' + esc(vt.label) + '</p>' +
+        '<p style="font-size:12px; color:var(--slate); margin-top:4px;">Capacity: ' + vt.capacity + ' riders</p></div></div>'
+    );
+  }).join("");
+  return sectionHead("Fleet", "Real vehicle types from your operator record.",
+      '<button class="btn btn-primary" id="btnNewVT" style="width:auto;">+ New vehicle type</button>') +
+    '<div class="fleet-grid">' + cards + '</div>';
+}
+
+function openNewVTModal(){
+  openModal(
+    '<div class="modal-head"><h3 class="display">New vehicle type</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
+    '<div class="modal-body">' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Label</span><input class="field" id="vtLabel" placeholder="e.g. 6-Seat Golf Cart"></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Category</span><select class="field" id="vtCategory">' +
+        vehicleCategories.map(function(c){ return '<option value="' + c.key + '">' + c.label + '</option>'; }).join("") + '</select></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Capacity</span><input type="number" class="field" id="vtCapacity" value="4"></label>' +
+      '<div style="display:flex; justify-content:flex-end; gap:10px;"><button class="btn btn-ghost" id="vtCancel">Cancel</button><button class="btn btn-primary" style="width:auto;" id="vtCreate">Create</button></div>' +
+    '</div>'
+  );
+  document.getElementById("modalCloseBtn").onclick = closeModal;
+  document.getElementById("vtCancel").onclick = closeModal;
+  document.getElementById("vtCreate").onclick = async function(){
+    var label = document.getElementById("vtLabel").value.trim();
+    if(!label) return;
+    await sb.from("vehicle_types").insert({
+      operator_id: state.profile.operator_id, label: label,
+      category: document.getElementById("vtCategory").value,
+      capacity: Number(document.getElementById("vtCapacity").value),
+    });
+    closeModal(); await loadOperatorData(); render();
+  };
+}
+
+/* ---------- EVENTS ---------- */
+
+function accessMatrixHtml(driverAccess, riderAccess){
+  var cells = [
+    {d:"open",r:"open",label:"Public zone",desc:"Any approved driver may serve; anyone can request."},
+    {d:"open",r:"verified",label:"Ticket-gated, open fleet",desc:"Any approved driver may serve; riders need a credential."},
+    {d:"closed",r:"open",label:"Dedicated fleet, open riders",desc:"Only your credentialed drivers; anyone inside can hail."},
+    {d:"closed",r:"verified",label:"Full lockdown (VIP)",desc:"Dedicated fleet + ticket-gated riders."},
+  ];
+  return '<div class="matrix">' + cells.map(function(c){
+    var active = c.d===driverAccess && c.r===riderAccess;
+    return '<button type="button" class="matrix-cell ' + (active?"active":"") + '" data-d="' + c.d + '" data-r="' + c.r + '">' +
+      '<div class="t">' + c.label + '</div><div class="d">' + c.desc + '</div></button>';
+  }).join("") + '</div>';
+}
+
+function renderEvents(){
+  var cards = state.events.map(function(ev){
+    var isClosed = ev.driver_access_mode === "closed";
+    return (
+      '<div class="card event-card"><div style="display:flex; justify-content:space-between; align-items:flex-start;"><div>' +
+        '<p class="display" style="font-weight:600; font-size:18px;">' + esc(ev.name) + '</p>' +
+        '<p style="font-size:12px; color:var(--slate); margin-top:2px;">' + esc(ev.status) + '</p></div></div>' +
+        '<div class="chip-row" style="margin-top:12px;">' +
+          '<span class="badge ' + (isClosed?"b-coral":"b-slate") + '">' + (isClosed?"Closed fleet":"Open fleet") + '</span>' +
+          '<span class="badge ' + (ev.rider_access_mode==="verified"?"b-coral":"b-slate") + '">' + (ev.rider_access_mode==="verified"?"Verified riders":"Open riders") + '</span>' +
+        '</div></div>'
+    );
+  }).join("");
+  return sectionHead("Events", "Real events, persisted with the same access-control matrix from the spec.",
+      '<button class="btn btn-primary" id="btnNewEvent" style="width:auto;">+ New event</button>') +
+    '<div class="event-grid">' + cards + '</div>';
+}
+
+function openNewEventModal(){
+  state.eventDraft = { step:1, name:"", zoneId: state.zones[0] ? state.zones[0].id : null, driverAccess:"open", riderAccess:"open" };
+  renderEventModal();
+}
+
+function renderEventModal(){
+  var d = state.eventDraft;
+  var body = "";
+  if(d.step===1){
+    body = (
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Event name</span><input class="field" id="evName" value="' + esc(d.name) + '" placeholder="e.g. Founders Cup — VIP Shuttle"></label>' +
+      '<label style="display:block;"><span class="field-label">Zone</span><select class="field" id="evZone">' +
+        state.zones.map(function(z){ return '<option value="' + z.id + '" ' + (z.id===d.zoneId?"selected":"") + '>' + esc(z.name) + '</option>'; }).join("") +
+      '</select></label>'
+    );
+  } else if(d.step===2){
+    body = '<p style="font-size:14px; font-weight:600; margin-bottom:12px;">Access control</p>' + accessMatrixHtml(d.driverAccess, d.riderAccess);
+  } else {
+    var zoneName = (state.zones.find(function(z){ return z.id===d.zoneId; })||{}).name || "";
+    body = (
+      '<div style="background:#F7F5F0; border-radius:12px; padding:16px; font-size:14px; line-height:2;">' +
+        '<p><span style="color:var(--slate);">Name:</span> ' + esc(d.name) + '</p>' +
+        '<p><span style="color:var(--slate);">Zone:</span> ' + esc(zoneName) + '</p>' +
+        '<p><span style="color:var(--slate);">Access:</span> ' + d.driverAccess + ' fleet / ' + d.riderAccess + ' riders</p>' +
+      '</div>'
+    );
+  }
+  openModal(
+    '<div class="modal-head"><h3 class="display">New event — step ' + d.step + ' of 3</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
+    '<div class="modal-body">' + body +
+      '<div style="display:flex; justify-content:space-between; margin-top:24px;">' +
+        '<button class="btn btn-ghost" id="evBack">' + (d.step>1?"Back":"Cancel") + '</button>' +
+        '<button class="btn btn-primary" style="width:auto;" id="evNext">' + (d.step<3?"Continue":"Create event") + '</button>' +
+      '</div>' +
+    '</div>'
+  , true);
+  document.getElementById("modalCloseBtn").onclick = closeModal;
+  if(d.step===1){
+    document.getElementById("evName").oninput = function(e){ d.name = e.target.value; };
+    document.getElementById("evZone").onchange = function(e){ d.zoneId = e.target.value; };
+  }
+  if(d.step===2){
+    document.querySelectorAll(".matrix-cell").forEach(function(cell){
+      cell.onclick = function(){ d.driverAccess = cell.dataset.d; d.riderAccess = cell.dataset.r; renderEventModal(); };
+    });
+  }
+  document.getElementById("evBack").onclick = function(){ if(d.step>1){ d.step--; renderEventModal(); } else closeModal(); };
+  document.getElementById("evNext").onclick = async function(){
+    if(d.step<3){ d.step++; renderEventModal(); return; }
+    await sb.from("events").insert({
+      operator_id: state.profile.operator_id, zone_id: d.zoneId, name: d.name,
+      driver_access_mode: d.driverAccess, rider_access_mode: d.riderAccess,
+      vehicle_quota: {}, status: "scheduled",
+    });
+    closeModal(); await loadOperatorData(); render();
+  };
+}
+
+/* ---------- DRIVERS ---------- */
+
+function renderDrivers(){
+  var rows = state.approvedDrivers.map(function(a){
+    var name = a.drivers && a.drivers.profiles ? a.drivers.profiles.full_name : "Unnamed driver";
+    return (
+      '<tr><td><div class="driver-row"><div class="avatar">' + (name||"?").split(" ").map(function(n){return n[0];}).join("").slice(0,2) + '</div>' + esc(name||"Unnamed") + '</div></td>' +
+      '<td><span class="badge b-turf">' + catLabel(a.category) + '</span></td>' +
+      '<td><span class="badge ' + (a.drivers && a.drivers.employment_type==="employed"?"b-ink":"b-slate") + '">' + (a.drivers?a.drivers.employment_type:"—") + '</span></td></tr>'
+    );
+  }).join("");
+  return sectionHead("Drivers", "Platform-approved drivers — category approvals live in the platform admin, read-only here.") +
+    '<div class="card" style="overflow-x:auto;"><table><thead><tr><th>Driver</th><th>Category</th><th>Type</th></tr></thead><tbody>' +
+    (rows || '<tr><td colspan="3" style="text-align:center; color:var(--slate);">No approved drivers yet</td></tr>') + '</tbody></table></div>';
+}
+
+/* ---------- PRICING ---------- */
+
+function renderPricing(){
+  var p = state.pricing;
+  var preview = ((p.on_demand_base_cents + p.on_demand_per_mile_cents*0.5 + p.on_demand_per_minute_cents*4 + p.on_demand_booking_fee_cents)/100).toFixed(2);
+  return (
+    sectionHead("Pricing", "Real pricing row for your operator — saved on change.") +
+    '<div class="card" style="padding:20px; max-width:400px;">' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Base fare ($)</span><input type="number" step="0.05" class="field pr-input" data-key="on_demand_base_cents" value="' + (p.on_demand_base_cents/100) + '"></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Per mile ($)</span><input type="number" step="0.05" class="field pr-input" data-key="on_demand_per_mile_cents" value="' + (p.on_demand_per_mile_cents/100) + '"></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Per minute ($)</span><input type="number" step="0.05" class="field pr-input" data-key="on_demand_per_minute_cents" value="' + (p.on_demand_per_minute_cents/100) + '"></label>' +
+      '<label style="display:block;"><span class="field-label">Booking fee ($)</span><input type="number" step="0.05" class="field pr-input" data-key="on_demand_booking_fee_cents" value="' + (p.on_demand_booking_fee_cents/100) + '"></label>' +
+    '</div>' +
+    '<div class="card" style="background:var(--ink); padding:20px; margin-top:20px; max-width:400px;">' +
+      '<p class="mono" style="font-size:11px; text-transform:uppercase; color:var(--gold); margin-bottom:8px;">Sample fare</p>' +
+      '<p class="display" style="font-size:28px; font-weight:600; color:#fff;">$' + preview + '</p>' +
+    '</div>'
+  );
+}
+
+/* ---------- BRANDING ---------- */
+
+function renderBranding(){
+  var b = state.operator;
+  return (
+    sectionHead("Branding", "Updates your real operators row.") +
+    '<div class="card" style="padding:20px; max-width:400px;">' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Zone display name</span><input class="field" id="brName" value="' + esc(b.zone_display_name||b.display_name) + '"></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Primary color</span><input type="color" id="brColor" value="' + (b.primary_color_hex||"#0E1A2B") + '" style="width:50px; height:36px; border:none; border-radius:8px;"></label>' +
+      '<button class="btn btn-primary" style="width:auto;" id="brSave">Save</button>' +
+    '</div>'
+  );
+}
+
+/* ---------- MODAL HELPERS ---------- */
+
+function openModal(html){ document.getElementById("modal").innerHTML = html; document.getElementById("modalBackdrop").classList.remove("hidden"); }
+function closeModal(){ document.getElementById("modalBackdrop").classList.add("hidden"); }
+
+/* ---------- RENDER + BIND ---------- */
+
+function render(){
+  if(state.screen==="auth"){ document.getElementById("root").innerHTML = screenAuth(); bindAuth(); return; }
+  if(state.screen==="loading"){ document.getElementById("root").innerHTML = '<div class="authwrap"><p class="mono">Loading…</p></div>'; return; }
+
+  renderShell();
+  var map = { overview:renderOverview, zones:renderZones, fleet:renderFleet, events:renderEvents, drivers:renderDrivers, pricing:renderPricing, branding:renderBranding };
+  document.getElementById("main").innerHTML = map[state.tab]();
+  bindTab();
+}
+
+function bindAuth(){
+  document.getElementById("authToggle").onclick = function(){ state.authMode = state.authMode==="login"?"signup":"login"; state.authError=null; render(); };
+  document.getElementById("authSubmit").onclick = async function(){
+    var email = document.getElementById("authEmail").value.trim();
+    var password = document.getElementById("authPassword").value;
+    var res;
+    if(state.authMode==="signup"){
+      var name = document.getElementById("authName").value.trim();
+      res = await sb.auth.signUp({ email:email, password:password, options:{ data:{ full_name:name, role:"operator_staff" } } });
+    } else {
+      res = await sb.auth.signInWithPassword({ email:email, password:password });
+    }
+    if(res.error){ state.authError = res.error.message; render(); return; }
+    state.session = res.data.session;
+    await bootstrapProfile();
+  };
+}
+
+function bindTab(){
+  if(state.tab==="zones"){ document.getElementById("btnNewZone").onclick = openNewZoneModal; }
+  if(state.tab==="fleet"){ document.getElementById("btnNewVT").onclick = openNewVTModal; }
+  if(state.tab==="events"){ document.getElementById("btnNewEvent").onclick = openNewEventModal; }
+  if(state.tab==="pricing"){
+    document.querySelectorAll(".pr-input").forEach(function(inp){
+      inp.onchange = async function(e){
+        var key = e.target.dataset.key;
+        var updates = {}; updates[key] = Math.round(Number(e.target.value)*100);
+        await sb.from("operator_pricing").update(updates).eq("operator_id", state.profile.operator_id);
+        await loadOperatorData(); render();
+      };
+    });
+  }
+  if(state.tab==="branding"){
+    document.getElementById("brSave").onclick = async function(){
+      await sb.from("operators").update({
+        zone_display_name: document.getElementById("brName").value,
+        primary_color_hex: document.getElementById("brColor").value,
+      }).eq("id", state.profile.operator_id);
+      await loadOperatorData(); render();
+    };
+  }
+}
+
+/* ---------- BOOTSTRAP ---------- */
+
+async function bootstrapProfile(){
+  var profRes = await sb.from("profiles").select("*").eq("id", state.session.user.id).single();
+  state.profile = profRes.data;
+
+  // Demo bootstrap: link this account to the demo operator if not already linked.
+  // In production this would come from an approved operator application, not an auto-link.
+  if(!state.profile.operator_id){
+    await sb.from("profiles").update({ operator_id: DEMO_OPERATOR_ID, role: "operator_staff" }).eq("id", state.session.user.id);
+    state.profile.operator_id = DEMO_OPERATOR_ID;
+  }
+
+  await loadOperatorData();
+  state.screen = "dashboard";
+  render();
+}
+
+async function boot(){
+  var sess = await sb.auth.getSession();
+  state.session = sess.data.session;
+  if(state.session){ await bootstrapProfile(); }
+  else { state.screen = "auth"; render(); }
+}
+
+boot();
+</script>
+</body>
+</html>

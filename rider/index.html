@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Karts2Me — Rider</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0E1A2B">
+<link rel="apple-touch-icon" href="/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://js.stripe.com/v3/"></script>
+<style>
+  :root{
+    --ink:#0E1A2B; --ink-2:#16263D; --cream:#FAF7F0; --card:#FFFFFF;
+    --gold:#E8A83C; --coral:#E85D3F; --turf:#3D7A4D; --slate:#64748B; --slate-100:#E7E9ED;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0; background:#DCD7CB; font-family:'Inter',sans-serif; color:var(--ink); -webkit-text-size-adjust:100%;}
+  h1,h2,h3,p{margin:0;}
+  button,select,input{font-family:inherit;}
+  .display{font-family:'Space Grotesk',sans-serif;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+
+  body{display:flex; align-items:flex-start; justify-content:center; min-height:100vh; padding:24px 0;}
+  .phone{ width:390px; max-width:100vw; height:844px; max-height:92vh; background:var(--cream); overflow:hidden; position:relative; margin:0 auto; }
+  @media (min-width:440px){ .phone{ border-radius:44px; border:8px solid #0a0a0a; box-shadow:0 30px 60px -20px rgba(0,0,0,0.35); } }
+  .notch{ position:absolute; top:0; left:50%; transform:translateX(-50%); width:120px; height:26px; background:#0a0a0a; border-radius:0 0 16px 16px; z-index:50; }
+  .app-logo-badge{ position:absolute; top:14px; left:16px; width:26px; height:26px; border-radius:8px; object-fit:cover; z-index:40; box-shadow:0 1px 4px rgba(0,0,0,0.25); }
+  .screen{ position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+
+  .badge{display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; padding:3px 12px 3px 9px; clip-path: polygon(8% 0, 92% 0, 100% 50%, 92% 100%, 8% 100%, 0 50%);}
+  .b-turf{background:#E7F3E9; color:#3D7A4D;} .b-gold{background:#FBF0DC; color:#B87A16;}
+  .b-coral{background:#FBE7E1; color:#C24B31;} .b-slate{background:#EEF0F3; color:#5B6472;} .b-ink{background:#0E1A2B; color:#fff;}
+
+  .sheet{ position:absolute; left:0; right:0; bottom:0; background:#fff; border-radius:24px 24px 0 0; box-shadow:0 -8px 30px rgba(14,26,43,0.15); }
+  .btn-primary{background:var(--ink); color:#fff; border-radius:14px; font-weight:600; border:none; width:100%; padding:16px; font-size:15px;}
+  .btn-primary:disabled{background:var(--slate-100); color:var(--slate);}
+  .btn-ghost{background:#F3F1EB; border-radius:14px; font-weight:600; border:none; width:100%; padding:16px; font-size:14px;}
+  .pulse-ring{position:relative;}
+  .pulse-ring::after{content:''; position:absolute; inset:-6px; border-radius:9999px; border:2px solid var(--turf); opacity:0; animation:pr 1.8s ease-out infinite;}
+  @keyframes pr{0%{opacity:.6; transform:scale(.7);} 100%{opacity:0; transform:scale(1.8);}}
+  .seat-dot{ width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; border:2px solid var(--slate-100); background:#fff; cursor:pointer; }
+  .topbar{ display:flex; align-items:center; justify-content:space-between; padding:48px 20px 12px; }
+  .backbtn{ width:36px; height:36px; border-radius:99px; background:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,0.1); font-size:18px; border:none; cursor:pointer; }
+  .card{ background:#fff; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+  .field{ width:100%; background:#fff; border:1px solid var(--slate-100); border-radius:12px; padding:12px 14px; font-size:14px; }
+  .field:focus{ outline:none; border-color:var(--gold); }
+  .errbox{ background:#FBE7E1; color:#C24B31; border-radius:10px; padding:10px 12px; font-size:12px; margin-top:8px; }
+  .leaflet-container{ background:var(--ink) !important; font-family:'Inter',sans-serif; }
+  .k2-pin{ width:14px; height:14px; border-radius:99px; box-shadow:0 0 0 4px rgba(232,168,60,0.25); }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="notch"></div>
+  <img class="app-logo-badge" src="/logo.png" alt="Karts2Me logo">
+  <div class="screen" id="screen"></div>
+</div>
+
+<script>
+/* ============================================================
+   SUPABASE — REAL BACKEND CONNECTION
+   ============================================================ */
+var SUPABASE_URL = "https://ajmtwylkhmwoistuewox.supabase.co";
+var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqbXR3eWxraG13b2lzdHVld294Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDQzNjEsImV4cCI6MjEwMzU4MDM2MX0.TbUinkDkL9t_N_4NS26OFF8zX6hSawxWufqGRm65rKk";
+var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+var STRIPE_PUBLISHABLE_KEY = "pk_live_Gvw0y1ixZXB3OeRZFm2mPStL";
+var stripeClient = Stripe(STRIPE_PUBLISHABLE_KEY);
+var elementsInstance = null;
+var VAPID_PUBLIC_KEY = "BHAJDbP5hpBxwGmcC4L-9EE4ioBEANMtM2WD9I19R7SdaMAlA8Q0-l56Q6enKBO0pgRR_8vjJUSnuLw6UJs33jk";
+
+var TERMS_VERSION = "2026-08-29";
+var OPERATOR_ID = "00000000-0000-0000-0000-000000000001";
+var ZONE_ID = "00000000-0000-0000-0000-000000000010";
+
+var state = {
+  screen: "loading",
+  session: null,
+  authMode: "login",
+  authError: null,
+  termsAgreed: false,
+  pois: [],
+  pricing: null,
+  dest: null,
+  seats: 1,
+  buyout: false,
+  currentRideId: null,
+  people: [
+    { name:"You", status:"paid_confirmed" },
+    { name:"Maria", status:"paid_confirmed" },
+    { name:"Jake", status:"paid_unconfirmed" },
+  ],
+  eta: 4,
+  rating: 0,
+  showTip: false,
+  tip: null,
+};
+
+var DRIVER = { name:"Jenna Cole", rating:4.8, vehicle:"4-Seat Golf Cart · #12", photo:"JC" };
+var ZONE_CENTER = [27.9504, -82.4573];
+
+function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function go(screen){ state.screen = screen; render(); window.scrollTo(0,0); }
+
+function urlBase64ToUint8Array(base64String){
+  var padding = '='.repeat((4 - base64String.length % 4) % 4);
+  var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  var rawData = atob(base64);
+  var outputArray = new Uint8Array(rawData.length);
+  for (var i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+async function enablePushNotifications(){
+  if(!("serviceWorker" in navigator) || !("PushManager" in window)) return false;
+  var perm = await Notification.requestPermission();
+  if(perm !== "granted") return false;
+  var reg = await navigator.serviceWorker.ready;
+  var sub = await reg.pushManager.getSubscription();
+  if(!sub){
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+  }
+  var json = sub.toJSON();
+  await sb.from("push_subscriptions").upsert({
+    user_id: state.session.user.id, endpoint: json.endpoint,
+    p256dh: json.keys.p256dh, auth: json.keys.auth,
+  }, { onConflict: "endpoint" });
+  return true;
+}
+
+async function loadZoneData(){
+  var poisRes = await sb.from("points_of_interest").select("id,name,lat,lng").eq("zone_id", ZONE_ID);
+  state.pois = poisRes.data || [];
+  var priceRes = await sb.from("operator_pricing").select("*").eq("operator_id", OPERATOR_ID).single();
+  state.pricing = priceRes.data;
+}
+
+function fareTotal(){
+  var p = state.pricing;
+  if(!p) return 0;
+  var base = p.on_demand_base_cents/100;
+  var perSeat = 2.00;
+  var capacity = 4;
+  var extra = state.buyout ? capacity-1 : state.seats-1;
+  return base + perSeat*extra;
+}
+
+function screenAuth(){
+  var isSignup = state.authMode === "signup";
+  return (
+    '<div style="height:100%; display:flex; flex-direction:column; justify-content:center; padding:0 28px;">' +
+      '<div style="text-align:center; margin-bottom:28px;">' +
+        '<img src="/logo.png" style="width:64px; height:64px; border-radius:16px; margin-bottom:14px;">' +
+        '<p class="display" style="font-size:20px; font-weight:600;">' + (isSignup ? "Create your account" : "Welcome back") + '</p>' +
+        '<p style="font-size:13px; color:var(--slate); margin-top:4px;">' + (isSignup ? "Book carts and shuttles in seconds" : "Log in to keep riding") + '</p>' +
+      '</div>' +
+      (isSignup ? '<input id="authName" class="field" placeholder="Full name" style="margin-bottom:10px;">' : "") +
+      '<input id="authEmail" class="field" placeholder="Email" type="email" style="margin-bottom:10px;">' +
+      '<input id="authPassword" class="field" placeholder="Password" type="password" style="margin-bottom:6px;">' +
+      (state.authError ? '<div class="errbox">' + esc(state.authError) + '</div>' : "") +
+      '<button id="authSubmit" class="btn-primary" style="margin-top:14px;">' + (isSignup ? "Sign up" : "Log in") + '</button>' +
+      '<button id="authToggle" style="background:none; border:none; margin-top:14px; font-size:13px; color:var(--slate); text-decoration:underline;">' +
+        (isSignup ? "Already have an account? Log in" : "New to Karts2Me? Create an account") + '</button>' +
+    '</div>'
+  );
+}
+
+function screenTerms(){
+  return (
+    '<div style="height:100%; display:flex; flex-direction:column;">' +
+      '<div style="padding:48px 20px 16px;">' +
+        '<div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">' +
+          '<div style="width:36px; height:36px; border-radius:10px; background:var(--ink); display:flex; align-items:center; justify-content:center; color:var(--gold); font-weight:700; font-size:15px;">!</div>' +
+          '<p class="display" style="font-size:19px; font-weight:600;">Before you ride</p>' +
+        '</div>' +
+        '<p style="font-size:13px; color:var(--slate); line-height:1.5;">Please review and accept the Karts2Me Terms of Service to continue.</p>' +
+      '</div>' +
+      '<div style="flex:1; overflow-y:auto; padding:0 20px;">' +
+        '<div class="card" style="padding:16px; margin-bottom:12px;">' +
+          '<p style="font-size:13px; font-weight:600; margin-bottom:6px;">Arbitration Agreement</p>' +
+          '<p style="font-size:12px; color:var(--slate); line-height:1.5;">Disputes with Karts2Me are resolved through individual binding arbitration, not in court, and not as part of a class action. You may opt out within 30 days of accepting.</p>' +
+        '</div>' +
+        '<div class="card" style="padding:16px; margin-bottom:12px; border:1px solid var(--coral);">' +
+          '<p style="font-size:13px; font-weight:600; margin-bottom:6px; color:var(--coral);">Warning: Assumption of Risk &amp; Liability Waiver</p>' +
+          '<p style="font-size:12px; color:var(--slate); line-height:1.5;">Riding in a golf cart or shuttle carries inherent risk. Karts2Me is a technology platform, not a transportation carrier, and is not responsible for injury, death, or property damage arising from a ride, except for Karts2Me\'s own gross negligence or willful misconduct, which can never be waived.</p>' +
+        '</div>' +
+      '</div>' +
+      '<div style="padding:16px 20px 8px;">' +
+        '<label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer;">' +
+          '<input type="checkbox" id="agreeCheckbox" style="width:20px; height:20px; margin-top:1px; flex-shrink:0;" ' + (state.termsAgreed?"checked":"") + '>' +
+          '<span style="font-size:13px; line-height:1.4;">I have read and agree to the <b>Karts2Me Terms of Service</b>, including Arbitration and the Liability Waiver above.</span>' +
+        '</label>' +
+      '</div>' +
+      '<div style="padding:12px 20px 32px;"><button id="continueBtn" class="btn-primary" ' + (state.termsAgreed?"":"disabled") + '>Agree &amp; continue</button></div>' +
+    '</div>'
+  );
+}
+
+var mapInstance = null;
+function mountMap(elId){
+  if(mapInstance){ mapInstance.remove(); mapInstance = null; }
+  var m = L.map(elId, { zoomControl:false, attributionControl:false }).setView(ZONE_CENTER, 16);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom:19 }).addTo(m);
+  var youIcon = L.divIcon({ className:'', html:'<div class="k2-pin pulse-ring" style="background:#E8A83C;"></div>' });
+  L.marker(ZONE_CENTER, { icon: youIcon }).addTo(m);
+  state.pois.forEach(function(p){
+    var icon = L.divIcon({ className:'', html:'<div class="k2-pin" style="background:#3D7A4D;"></div>' });
+    L.marker([p.lat, p.lng], { icon: icon }).addTo(m).bindPopup(esc(p.name));
+  });
+  mapInstance = m;
+  setTimeout(function(){ m.invalidateSize(); }, 50);
+}
+
+function screenHome(){
+  return (
+    '<div style="padding-bottom:24px;">' +
+      '<div style="display:flex; align-items:center; justify-content:space-between; padding:48px 20px 16px;">' +
+        '<div><p class="mono" style="font-size:12px; color:var(--slate);">Good afternoon</p><p class="display" style="font-size:20px; font-weight:600;">Where to?</p></div>' +
+        '<button id="logoutBtn" style="width:36px; height:36px; border-radius:99px; background:var(--ink); color:#fff; border:none; font-size:14px;">&#9099;</button>' +
+      '</div>' +
+      '<div style="margin:0 20px; height:260px; border-radius:24px; overflow:hidden;"><div id="homeMap" style="width:100%; height:100%;"></div></div>' +
+      (Notification && Notification.permission!=="granted" ? '<div style="padding:0 20px; margin-top:12px;"><div class="card" style="padding:14px; background:#FBF0DC; box-shadow:none;">' +
+        '<p style="font-size:13px; font-weight:600;">Get ride updates instantly</p>' +
+        '<p style="font-size:12px; color:var(--slate); margin:2px 0 8px;">We will notify you when a driver accepts.</p>' +
+        '<button id="enablePushBtn" class="btn-ghost" style="padding:8px;">Enable notifications</button></div></div>' : "") +
+      '<div style="padding:0 20px; margin-top:16px;">' +
+        '<button id="goSearch" style="width:100%; display:flex; align-items:center; gap:10px; background:#fff; border-radius:16px; padding:14px 16px; box-shadow:0 1px 3px rgba(0,0,0,0.06); border:none; text-align:left;">' +
+          '<span style="color:var(--slate);">Search</span><span style="font-size:14px; color:var(--slate);">Search a destination&hellip;</span></button>' +
+      '</div>' +
+      '<p style="padding:0 20px; margin-top:20px; font-size:11px; font-family:\'IBM Plex Mono\',monospace; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate);">Points of interest &mdash; live from database</p>' +
+      '<div style="padding:0 20px; margin-top:8px; display:flex; flex-direction:column; gap:8px;">' +
+        state.pois.map(function(p){
+          return '<div class="card" style="display:flex; align-items:center; gap:10px; padding:12px 16px;"><span style="color:var(--coral);">&#128205;</span><span style="font-size:14px; font-weight:500;">' + esc(p.name) + '</span></div>';
+        }).join("") +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function screenSearch(){
+  return (
+    '<div class="topbar"><button class="backbtn" id="backHome">&lsaquo;</button><p class="display" style="font-weight:600; font-size:15px;">Choose destination</p><div style="width:36px;"></div></div>' +
+    '<div style="padding:0 20px; display:flex; flex-direction:column; gap:6px;">' +
+      state.pois.map(function(p){
+        return '<button class="poi-btn card" data-poi="' + esc(p.name) + '" style="display:flex; align-items:center; gap:10px; padding:14px 16px; border:none; width:100%; text-align:left;">' +
+          '<span style="color:var(--coral);">&#128205;</span><span style="font-size:14px; font-weight:500;">' + esc(p.name) + '</span></button>';
+      }).join("") +
+    '</div>'
+  );
+}
+
+function screenMode(){
+  var t = fareTotal();
+  var opts = [
+    { key:"on_demand", icon:"&#128663;", label:"On-Demand Cart", eta:"4 min", price:"$" + t.toFixed(2) },
+    { key:"fixed_route", icon:"&#128652;", label:"Beach Loop (next)", eta:"2 min", price:"Free", free:true },
+    { key:"reserved", icon:"&#128197;", label:"Reserve for later", eta:null, price:"&rarr;" },
+  ];
+  return (
+    '<div style="position:relative; height:100%;">' +
+      '<div style="margin:0 20px; height:260px; border-radius:24px; overflow:hidden; position:absolute; top:0; left:0; right:0;"><div id="modeMap" style="width:100%; height:100%;"></div></div>' +
+      '<button class="backbtn" id="backSearch" style="position:absolute; top:48px; left:20px; z-index:10;">&lsaquo;</button>' +
+      '<div class="sheet" style="padding:16px 20px 32px;">' +
+        '<div style="width:40px; height:4px; border-radius:99px; background:var(--slate-100); margin:0 auto 16px;"></div>' +
+        '<p class="mono" style="font-size:12px; color:var(--slate);">To</p>' +
+        '<p class="display" style="font-size:18px; font-weight:600; margin-bottom:16px;">' + esc(state.dest) + '</p>' +
+        '<div style="display:flex; flex-direction:column; gap:10px;">' +
+          opts.map(function(o){
+            return '<button class="mode-btn" data-mode="' + o.key + '" style="width:100%; display:flex; align-items:center; justify-content:space-between; border-radius:16px; padding:14px 16px; border:2px solid ' + (o.free?"var(--gold)":"var(--slate-100)") + '; background:' + (o.free?"#FBF0DC":"#fff") + '; text-align:left;">' +
+              '<div style="display:flex; align-items:center; gap:10px;"><span style="font-size:20px;">' + o.icon + '</span><div><p style="font-size:14px; font-weight:600;">' + o.label + '</p>' +
+              (o.eta ? '<p style="font-size:12px; color:var(--slate);">' + o.eta + ' away</p>' : '') + '</div></div>' +
+              '<p class="mono" style="font-size:14px; font-weight:600;">' + o.price + '</p></button>';
+          }).join("") +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function screenConfirm(){
+  var t = fareTotal();
+  var p = state.pricing;
+  var base = p ? p.on_demand_base_cents/100 : 0;
+  var CAPACITY = 4, PER_SEAT = 2.00;
+  var extraCount = state.buyout ? CAPACITY-1 : state.seats-1;
+  return (
+    '<div class="topbar"><button class="backbtn" id="backMode">&lsaquo;</button><p class="display" style="font-weight:600; font-size:15px;">Confirm ride</p><div style="width:36px;"></div></div>' +
+    '<div style="padding:0 20px;">' +
+      '<div class="card" style="padding:16px; display:flex; align-items:center; gap:10px; margin-bottom:16px;">' +
+        '<span style="font-size:24px;">&#128663;</span><div><p style="font-size:14px; font-weight:600;">4-Seat Golf Cart</p><p style="font-size:12px; color:var(--slate);">To ' + esc(state.dest) + ' &middot; ~4 min</p></div></div>' +
+      '<p style="font-size:11px; font-family:\'IBM Plex Mono\',monospace; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate); margin-bottom:8px;">Seats needed</p>' +
+      '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">' +
+        Array.from({length:CAPACITY}).map(function(_, i){
+          var active = !state.buyout && state.seats===i+1;
+          var filled = !state.buyout && state.seats>=i+1;
+          return '<button class="seat-btn" data-seat="' + (i+1) + '" style="border-color:' + (active?"var(--gold)":"var(--slate-100)") + '; background:' + (filled?"#FBF0DC":"#fff") + '; width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-family:\'IBM Plex Mono\',monospace; font-size:12px; font-weight:600; border-width:2px; border-style:solid;">' + (i+1) + '</button>';
+        }).join("") +
+        '<button id="buyoutBtn" style="margin-left:8px; padding:8px 12px; border-radius:8px; font-size:12px; font-weight:600; border:none; background:' + (state.buyout?"var(--ink)":"#F3F1EB") + '; color:' + (state.buyout?"#fff":"var(--ink)") + ';">Buy out</button>' +
+      '</div>' +
+      '<button id="openSplit" class="card" style="width:100%; display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border:none; margin:12px 0 16px; text-align:left;">' +
+        '<span style="font-size:14px; font-weight:600;">Split this ride with others</span><span style="color:var(--slate); font-size:13px;">+ Add people &rsaquo;</span></button>' +
+      '<div style="border-radius:16px; padding:16px; margin-bottom:16px; background:#F7F5F0;">' +
+        '<div style="display:flex; justify-content:space-between; font-size:14px; margin-bottom:4px;"><span>Base fare</span><span class="mono">$' + base.toFixed(2) + '</span></div>' +
+        (extraCount>0 ? '<div style="display:flex; justify-content:space-between; font-size:14px; margin-bottom:4px;"><span>' + (state.buyout?"Buyout ("+extraCount+" extra seats)":"Extra seats ("+extraCount+")") + '</span><span class="mono">$' + (PER_SEAT*extraCount).toFixed(2) + '</span></div>' : '') +
+        '<div style="display:flex; justify-content:space-between; font-size:14px; font-weight:600; margin-top:8px; padding-top:8px; border-top:1px solid var(--slate-100);"><span>Total</span><span class="mono">$' + t.toFixed(2) + '</span></div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="padding:0 20px 32px;"><button id="requestBtn" class="btn-primary">Request cart &mdash; $' + t.toFixed(2) + '</button></div>'
+  );
+}
+
+function statusLabel(status){
+  if(status==="paid_confirmed") return { label:"Paid, confirmed", tone:"b-turf" };
+  if(status==="paid_unconfirmed") return { label:"Paid, awaiting check-in", tone:"b-gold" };
+  return { label:"Not yet paid", tone:"b-coral" };
+}
+
+function screenSplit(){
+  var t = fareTotal();
+  var share = (t/3).toFixed(2);
+  var allReady = state.people.every(function(p){ return p.status==="paid_confirmed"; });
+  var emptyCost = state.people.filter(function(p){ return p.status!=="paid_confirmed"; }).length * share;
+  var rows = state.people.map(function(p, i){
+    var s = statusLabel(p.status);
+    return (
+      '<div class="card" style="display:flex; align-items:center; justify-content:space-between; padding:14px 16px;">' +
+        '<div><p style="font-size:14px; font-weight:600;">' + p.name + '</p><p class="mono" style="font-size:12px; color:var(--slate);">$' + share + '</p></div>' +
+        '<div style="display:flex; align-items:center; gap:8px;"><span class="badge ' + s.tone + '">' + s.label + '</span>' +
+        (p.status==="paid_unconfirmed" ? '<button class="confirm-btn" data-idx="' + i + '" style="background:none; border:none; font-size:11px; font-weight:600; text-decoration:underline; color:var(--slate);">simulate check-in</button>' : '') +
+        '</div></div>'
+    );
+  }).join("");
+  return (
+    '<div class="topbar"><button class="backbtn" id="backConfirm">&lsaquo;</button><p class="display" style="font-weight:600; font-size:15px;">Split this ride</p><div style="width:36px;"></div></div>' +
+    '<div style="padding:0 20px;">' +
+      '<button class="card" style="width:100%; padding:14px 16px; border:none; margin-bottom:16px; text-align:left; font-size:14px; font-weight:600; color:var(--coral);">+ Invite more people</button>' +
+      '<div style="display:flex; flex-direction:column; gap:10px;">' + rows + '</div>' +
+      (!allReady ? '<div style="margin-top:20px; border-radius:16px; padding:16px; background:#FBE7E1;"><p style="font-size:14px; font-weight:600; margin-bottom:4px;">Not everyone is confirmed yet</p><p style="font-size:12px; color:var(--slate);">You can depart now &mdash; you will absorb the cost of unconfirmed seats.</p></div>' : '') +
+    '</div>' +
+    '<div style="padding:16px 20px 32px;">' +
+      (allReady ? '<button id="splitDone" class="btn-primary">Everyone is ready &mdash; continue</button>' :
+        '<button id="splitDepart" class="btn-ghost">Depart now &mdash; you cover $' + emptyCost.toFixed(2) + ' more</button>') +
+    '</div>'
+  );
+}
+
+async function createRide(){
+  if(state.currentRideId) return;
+  var t = fareTotal();
+  var row = {
+    mode: "on_demand", zone_id: ZONE_ID, primary_rider_id: state.session.user.id,
+    pickup_label: "Current location", dropoff_label: state.dest,
+    seats_requested: state.seats, is_buyout: state.buyout,
+    fare_cents: Math.round(t*100), status: "requested",
+  };
+  var res = await sb.from("rides").insert(row).select().single();
+  if(res.data){
+    state.currentRideId = res.data.id;
+    fetch(SUPABASE_URL + "/functions/v1/notify-new-ride-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.session.access_token, "apikey": SUPABASE_ANON_KEY },
+      body: JSON.stringify({ ride_id: res.data.id }),
+    }).catch(function(){ /* notification failure shouldn't block the ride */ });
+  }
+}
+
+async function createPaymentIntentForRide(rideId){
+  var res = await fetch(SUPABASE_URL + "/functions/v1/create-payment-intent", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + state.session.access_token,
+      "apikey": SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ ride_id: rideId }),
+  });
+  var data = await res.json();
+  if(!res.ok) throw new Error(data.error || "Payment setup failed");
+  return data.client_secret;
+}
+
+function screenPayment(){
+  setTimeout(initPaymentScreen, 0);
+  var t = fareTotal();
+  return (
+    '<div class="topbar"><button class="backbtn" id="backConfirm2">&lsaquo;</button><p class="display" style="font-weight:600; font-size:15px;">Pay for your ride</p><div style="width:36px;"></div></div>' +
+    '<div style="padding:0 20px;">' +
+      '<div id="paymentStatus" style="text-align:center; padding:30px 10px; color:var(--slate); font-size:13px;">Setting up secure payment&hellip;</div>' +
+      '<div id="payment-element" class="card" style="padding:16px; display:none;"></div>' +
+      '<div id="paymentError" class="errbox" style="display:none; margin-top:10px;"></div>' +
+    '</div>' +
+    '<div style="padding:16px 20px 32px;"><button id="payBtn" class="btn-primary" style="display:none;">Pay $' + t.toFixed(2) + '</button></div>'
+  );
+}
+
+async function initPaymentScreen(){
+  var statusEl = document.getElementById("paymentStatus");
+  try{
+    await createRide();
+    var clientSecret = await createPaymentIntentForRide(state.currentRideId);
+    elementsInstance = stripeClient.elements({ clientSecret: clientSecret });
+    var paymentElement = elementsInstance.create("payment");
+    paymentElement.mount("#payment-element");
+    statusEl.style.display = "none";
+    document.getElementById("payment-element").style.display = "block";
+    var payBtn = document.getElementById("payBtn");
+    payBtn.style.display = "block";
+    payBtn.onclick = confirmPaymentClick;
+  } catch(e){
+    if(statusEl) statusEl.textContent = "Could not start payment: " + e.message;
+  }
+}
+
+async function confirmPaymentClick(){
+  var btn = document.getElementById("payBtn");
+  var t = fareTotal();
+  btn.disabled = true; btn.textContent = "Processing\u2026";
+  var result = await stripeClient.confirmPayment({
+    elements: elementsInstance,
+    confirmParams: { return_url: window.location.href },
+    redirect: "if_required",
+  });
+  if(result.error){
+    var errEl = document.getElementById("paymentError");
+    errEl.textContent = result.error.message;
+    errEl.style.display = "block";
+    btn.disabled = false; btn.textContent = "Pay $" + t.toFixed(2);
+    return;
+  }
+  go("matching");
+}
+
+function screenMatching(){
+  createRide().then(function(){
+    setTimeout(function(){ go("active"); }, 1600);
+  });
+  return (
+    '<div style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 32px; text-align:center;">' +
+      '<div class="pulse-ring" style="width:80px; height:80px; border-radius:99px; background:#FBF0DC; display:flex; align-items:center; justify-content:center; margin-bottom:24px; color:var(--turf);"><span style="font-size:30px;">&#128663;</span></div>' +
+      '<p class="display" style="font-size:18px; font-weight:600;">Finding your cart&hellip;</p>' +
+      '<p style="font-size:14px; color:var(--slate); margin-top:4px;">Matching you with the nearest available driver</p>' +
+      '<p style="font-size:11px; color:var(--slate); margin-top:16px;" class="mono">Ride record created in database</p>' +
+    '</div>'
+  );
+}
+
+function screenActive(){
+  return (
+    '<div style="height:100%; display:flex; flex-direction:column;">' +
+      '<div style="flex:1; position:relative;"><div id="activeMap" style="width:100%; height:100%;"></div>' +
+        '<div style="position:absolute; top:48px; left:20px;"><span class="badge b-gold">ETA ' + state.eta + ' min</span></div></div>' +
+      '<div style="background:#fff; border-radius:24px 24px 0 0; margin-top:-24px; position:relative; z-index:1; padding:20px;">' +
+        '<div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">' +
+          '<div style="width:48px; height:48px; border-radius:99px; background:var(--ink); color:#fff; display:flex; align-items:center; justify-content:center; font-family:\'IBM Plex Mono\',monospace; font-size:14px; font-weight:600;">' + DRIVER.photo + '</div>' +
+          '<div style="flex:1;"><p style="font-size:14px; font-weight:600;">' + DRIVER.name + ' &middot; &#9733; ' + DRIVER.rating + '</p><p style="font-size:12px; color:var(--slate);">' + DRIVER.vehicle + '</p></div>' +
+          '<button style="width:40px; height:40px; border-radius:99px; background:#F3F1EB; border:none;">&#128172;</button>' +
+        '</div>' +
+        '<p style="font-size:12px; color:var(--slate); margin-bottom:16px;">Heading to ' + esc(state.dest) + ' &middot; <span class="mono">ride #' + (state.currentRideId ? state.currentRideId.slice(0,8) : "&hellip;") + '</span></p>' +
+        '<div style="display:flex; gap:10px;"><button class="btn-ghost" style="flex:1; padding:12px; font-size:12px;">SOS</button><button class="btn-ghost" style="flex:1; padding:12px; font-size:12px;">Share trip</button></div>' +
+        '<button id="simArrival" style="width:100%; margin-top:12px; background:none; border:none; font-size:12px; text-decoration:underline; color:var(--slate);">(dev) simulate arrival &mdash; matching is simulated, no live driver app yet</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function screenPost(){
+  if(!state.showTip){
+    return (
+      '<div style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 32px; text-align:center;">' +
+        '<p class="display" style="font-size:18px; font-weight:600; margin-bottom:4px;">Rate your ride</p>' +
+        '<p style="font-size:14px; color:var(--slate); margin-bottom:24px;">with ' + DRIVER.name + '</p>' +
+        '<div style="display:flex; gap:8px; margin-bottom:32px;">' +
+          [1,2,3,4,5].map(function(n){ return '<button class="star-btn" data-n="' + n + '" style="background:none; border:none; font-size:30px; opacity:' + (n<=state.rating?1:0.25) + ';">&#9733;</button>'; }).join("") +
+        '</div>' +
+        '<button id="toTip" class="btn-primary" style="max-width:200px;" ' + (state.rating===0?"disabled":"") + '>Continue</button>' +
+      '</div>'
+    );
+  }
+  return (
+    '<div style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 32px; text-align:center;">' +
+      '<p class="display" style="font-size:18px; font-weight:600; margin-bottom:4px;">Add a tip?</p>' +
+      '<p style="font-size:14px; color:var(--slate); margin-bottom:24px;">100% goes to ' + DRIVER.name + '</p>' +
+      '<div style="display:flex; gap:10px; margin-bottom:32px;">' +
+        [1,2,3].map(function(n){ return '<button class="tip-btn" data-n="' + n + '" style="padding:12px 20px; border-radius:12px; font-family:\'IBM Plex Mono\',monospace; font-weight:600; font-size:14px; border:none; background:' + (state.tip===n?"var(--ink)":"#F3F1EB") + '; color:' + (state.tip===n?"#fff":"var(--ink)") + ';">$' + n + '.00</button>'; }).join("") +
+      '</div>' +
+      '<button id="finishRide" class="btn-primary" style="max-width:200px;">Done</button>' +
+    '</div>'
+  );
+}
+
+function screenLoading(){
+  return '<div style="height:100%; display:flex; align-items:center; justify-content:center;"><p class="mono" style="font-size:12px; color:var(--slate);">Loading&hellip;</p></div>';
+}
+
+function render(){
+  var map = { loading:screenLoading, auth:screenAuth, terms:screenTerms, home:screenHome, search:screenSearch, mode:screenMode, confirm:screenConfirm,
+    split:screenSplit, payment:screenPayment, matching:screenMatching, active:screenActive, post:screenPost };
+  document.getElementById("screen").innerHTML = map[state.screen]();
+  bind();
+  if(state.screen==="home") setTimeout(function(){ mountMap("homeMap"); }, 0);
+  if(state.screen==="mode") setTimeout(function(){ mountMap("modeMap"); }, 0);
+  if(state.screen==="active") setTimeout(function(){ mountMap("activeMap"); }, 0);
+}
+
+function bind(){
+  var s = state.screen;
+
+  if(s==="auth"){
+    document.getElementById("authToggle").onclick = function(){
+      state.authMode = state.authMode==="login" ? "signup" : "login"; state.authError=null; render();
+    };
+    document.getElementById("authSubmit").onclick = async function(){
+      var email = document.getElementById("authEmail").value.trim();
+      var password = document.getElementById("authPassword").value;
+      var res;
+      if(state.authMode==="signup"){
+        var name = document.getElementById("authName").value.trim();
+        res = await sb.auth.signUp({ email:email, password:password, options:{ data:{ full_name:name, role:"rider" } } });
+      } else {
+        res = await sb.auth.signInWithPassword({ email:email, password:password });
+      }
+      if(res.error){ state.authError = res.error.message; render(); return; }
+      state.session = res.data.session;
+      await afterAuth();
+    };
+  }
+  if(s==="terms"){
+    document.getElementById("agreeCheckbox").onchange = function(e){ state.termsAgreed = e.target.checked; render(); };
+    document.getElementById("continueBtn").onclick = async function(){
+      if(!state.termsAgreed) return;
+      await sb.from("profiles").update({ terms_accepted_at: new Date().toISOString(), terms_version: TERMS_VERSION }).eq("id", state.session.user.id);
+      await loadZoneData();
+      go("home");
+    };
+  }
+  if(s==="home"){
+    document.getElementById("goSearch").onclick = function(){ go("search"); };
+    document.getElementById("logoutBtn").onclick = async function(){ await sb.auth.signOut(); location.reload(); };
+    var pushBtn = document.getElementById("enablePushBtn");
+    if(pushBtn) pushBtn.onclick = async function(){ var ok = await enablePushNotifications(); if(ok) render(); };
+  }
+  if(s==="search"){
+    document.getElementById("backHome").onclick = function(){ go("home"); };
+    document.querySelectorAll(".poi-btn").forEach(function(btn){ btn.onclick = function(){ state.dest = btn.dataset.poi; go("mode"); }; });
+  }
+  if(s==="mode"){
+    document.getElementById("backSearch").onclick = function(){ go("search"); };
+    document.querySelectorAll(".mode-btn").forEach(function(btn){
+      btn.onclick = function(){
+        var mode = btn.dataset.mode;
+        if(mode==="fixed_route") go("matching"); else go("confirm");
+      };
+    });
+  }
+  if(s==="confirm"){
+    document.getElementById("backMode").onclick = function(){ go("mode"); };
+    document.querySelectorAll(".seat-btn").forEach(function(btn){ btn.onclick = function(){ state.seats = Number(btn.dataset.seat); state.buyout = false; render(); }; });
+    document.getElementById("buyoutBtn").onclick = function(){ state.buyout = !state.buyout; render(); };
+    document.getElementById("openSplit").onclick = function(){ go("split"); };
+    document.getElementById("requestBtn").onclick = function(){ go("payment"); };
+  }
+  if(s==="split"){
+    document.getElementById("backConfirm").onclick = function(){ go("confirm"); };
+    document.querySelectorAll(".confirm-btn").forEach(function(btn){ btn.onclick = function(){ state.people[Number(btn.dataset.idx)].status = "paid_confirmed"; render(); }; });
+    var doneBtn = document.getElementById("splitDone"); if(doneBtn) doneBtn.onclick = function(){ go("payment"); };
+    var departBtn = document.getElementById("splitDepart"); if(departBtn) departBtn.onclick = function(){ go("payment"); };
+  }
+  if(s==="payment"){
+    var backBtn2 = document.getElementById("backConfirm2");
+    if(backBtn2) backBtn2.onclick = function(){ go("confirm"); };
+  }
+  if(s==="active"){
+    document.getElementById("simArrival").onclick = async function(){
+      if(state.currentRideId){
+        await sb.from("rides").update({ status:"completed", completed_at:new Date().toISOString() }).eq("id", state.currentRideId);
+      }
+      go("post");
+    };
+  }
+  if(s==="post"){
+    if(!state.showTip){
+      document.querySelectorAll(".star-btn").forEach(function(btn){ btn.onclick = function(){ state.rating = Number(btn.dataset.n); render(); }; });
+      var toTip = document.getElementById("toTip"); if(toTip) toTip.onclick = function(){ if(state.rating>0){ state.showTip = true; render(); } };
+    } else {
+      document.querySelectorAll(".tip-btn").forEach(function(btn){ btn.onclick = function(){ state.tip = Number(btn.dataset.n); render(); }; });
+      document.getElementById("finishRide").onclick = function(){
+        state.screen="home"; state.dest=null; state.seats=1; state.buyout=false; state.rating=0; state.showTip=false; state.tip=null; state.currentRideId=null;
+        state.people = [ { name:"You", status:"paid_confirmed" }, { name:"Maria", status:"paid_confirmed" }, { name:"Jake", status:"paid_unconfirmed" } ];
+        render();
+      };
+    }
+  }
+}
+
+async function afterAuth(){
+  var profRes = await sb.from("profiles").select("terms_accepted_at").eq("id", state.session.user.id).single();
+  await loadZoneData();
+  if(profRes.data && profRes.data.terms_accepted_at){
+    go("home");
+  } else {
+    go("terms");
+  }
+}
+
+async function boot(){
+  var sess = await sb.auth.getSession();
+  state.session = sess.data.session;
+  if(state.session){
+    await afterAuth();
+  } else {
+    go("auth");
+  }
+}
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
+}
+
+boot();
+</script>
+</body>
+</html>

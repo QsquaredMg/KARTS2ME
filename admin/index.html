@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Karts2Me — Platform Admin</title>
+<link rel="apple-touch-icon" href="/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --ink:#0B1522; --ink-2:#101F33; --panel:#132239; --panel-2:#0E1C2E; --cream:#FAF7F0;
+    --gold:#E8A83C; --coral:#E85D3F; --turf:#4FA868; --slate:#7C8AA0; --line:#1E3050;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0; background:var(--ink); font-family:'Inter',sans-serif; color:#EDF1F7;}
+  h1,h2,h3,p{margin:0;}
+  button,select,input{font-family:inherit;}
+  .display{font-family:'Space Grotesk',sans-serif;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+
+  .authwrap{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; background:var(--ink); }
+  .authbox{ width:100%; max-width:360px; background:var(--panel); border:1px solid var(--line); border-radius:20px; padding:32px; }
+  .field{ width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:10px; padding:10px 14px; font-size:14px; margin-bottom:10px; color:#EDF1F7; }
+  .field:focus{ outline:none; border-color:var(--gold); }
+  .errbox{ background:rgba(232,93,63,0.14); color:#F0977F; border-radius:10px; padding:10px 12px; font-size:12px; margin-bottom:10px; }
+  .btn{ border:none; border-radius:10px; font-weight:600; cursor:pointer; padding:10px 18px; font-size:14px; }
+  .btn-primary{ background:var(--gold); color:var(--ink); width:100%; padding:12px; }
+  .btn-ghost{ background:transparent; border:1px solid var(--line); color:#EDF1F7; }
+  .btn-danger{ background:rgba(232,93,63,0.12); color:#F0977F; border:1px solid rgba(232,93,63,0.3); }
+
+  .app{display:flex; min-height:100vh;}
+  .sidebar{width:250px; flex-shrink:0; background:var(--panel-2); padding:16px; display:flex; flex-direction:column; border-right:1px solid var(--line);}
+  .main{flex:1; padding:32px; max-width:1000px;}
+  .logo-row{display:flex; align-items:center; gap:10px; padding:8px; margin-bottom:24px;}
+  .logo-mark{width:36px; height:36px; border-radius:10px; object-fit:cover; flex-shrink:0; box-shadow:0 0 0 1px rgba(255,255,255,0.08);}
+  .logo-text .t1{color:#fff; font-weight:700; font-size:15px; letter-spacing:-0.02em;}
+  .logo-text .t2{color:var(--gold); font-size:9px; letter-spacing:0.2em; text-transform:uppercase;}
+  .nav{flex:1; display:flex; flex-direction:column; gap:4px;}
+  .nav-item{text-align:left; background:transparent; border:none; border-left:2px solid transparent; color:var(--slate);
+    padding:10px 12px; border-radius:8px; font-size:14px; font-weight:500; cursor:pointer; position:relative;}
+  .nav-item:hover{background:rgba(255,255,255,0.03);}
+  .nav-item.active{background:rgba(232,168,60,0.10); color:#fff; border-left-color:var(--gold);}
+  .nav-count{ float:right; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--gold); }
+  .admin-card{padding:12px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid var(--line);}
+  .admin-card button{margin-top:8px; width:100%; background:rgba(255,255,255,0.08); color:#fff; border:none; border-radius:8px; padding:6px; font-size:12px; cursor:pointer;}
+
+  .badge{display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; padding:3px 12px 3px 9px;
+    clip-path: polygon(8% 0, 92% 0, 100% 50%, 92% 100%, 8% 100%, 0 50%);}
+  .b-turf{background:rgba(79,168,104,0.14); color:#6FCB8C;} .b-gold{background:rgba(232,168,60,0.14); color:#F0BE6C;}
+  .b-coral{background:rgba(232,93,63,0.14); color:#F0977F;} .b-slate{background:rgba(124,138,160,0.14); color:#A6B2C4;}
+
+  .section-head{display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:24px; gap:16px; flex-wrap:wrap;}
+  .section-head h2{font-size:24px; font-weight:600; color:#fff;}
+  .section-head p{font-size:14px; color:var(--slate); margin-top:4px;}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:16px;}
+  .stat-row{display:flex; gap:16px; flex-wrap:wrap; margin-bottom:24px;}
+  .stat{flex:1; min-width:160px; padding:20px;}
+  .stat .label{font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate);}
+  .stat .value{font-size:30px; font-weight:600; margin-top:6px;}
+
+  table{width:100%; border-collapse:collapse; font-size:14px;}
+  th{text-align:left; padding:12px 20px; font-family:'IBM Plex Mono',monospace; font-size:11px; text-transform:uppercase;
+    letter-spacing:0.03em; color:var(--slate); border-bottom:1px solid var(--line);}
+  td{padding:16px 20px; border-bottom:1px solid var(--line); color:#EDF1F7;}
+  tr:last-child td{border-bottom:none;}
+  tr.clickable{cursor:pointer;}
+  tr.clickable:hover{background:rgba(255,255,255,0.02);}
+
+  .field-label{display:block; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.03em; color:var(--slate); margin-bottom:6px;}
+  .modal-backdrop{position:fixed; inset:0; background:rgba(4,9,16,0.7); display:flex; align-items:center; justify-content:center; padding:16px; z-index:100;}
+  .modal{background:var(--panel); border:1px solid var(--line); border-radius:16px; width:100%; max-width:560px; max-height:85vh; overflow-y:auto;}
+  .modal-head{display:flex; align-items:center; justify-content:space-between; padding:20px 24px 16px; border-bottom:1px solid var(--line);}
+  .modal-close{background:none; border:none; font-size:22px; color:var(--slate); cursor:pointer; line-height:1;}
+  .modal-body{padding:24px;}
+  .hidden{display:none !important;}
+  .req-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  .req-card{padding:20px;}
+  .approval-row, .ticket-row{display:flex; align-items:center; justify-content:space-between; padding:20px; flex-wrap:wrap; gap:12px;}
+  .avatar{width:44px; height:44px; border-radius:99px; background:var(--panel-2); border:1px solid var(--line); display:flex; align-items:center;
+    justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; flex-shrink:0;}
+  .demo-banner{ background:rgba(232,168,60,0.10); border:1px solid var(--gold); border-radius:10px; padding:10px 14px; font-size:12px; margin-bottom:20px; }
+
+  @media (max-width:760px){
+    .app{flex-direction:column;}
+    .sidebar{width:100%; flex-direction:row; align-items:center; overflow-x:auto; padding:12px;}
+    .nav{flex-direction:row;}
+    .nav-item{white-space:nowrap;}
+    .admin-card{display:none;}
+    .main{padding:20px;}
+    .req-grid{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div class="modal-backdrop hidden" id="modalBackdrop"><div class="modal" id="modal"></div></div>
+
+<script>
+var SUPABASE_URL = "https://ajmtwylkhmwoistuewox.supabase.co";
+var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqbXR3eWxraG13b2lzdHVld294Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDQzNjEsImV4cCI6MjEwMzU4MDM2MX0.TbUinkDkL9t_N_4NS26OFF8zX6hSawxWufqGRm65rKk";
+var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+var state = {
+  screen: "loading", authMode: "login", authError: null, session: null, profile: null,
+  tab: "overview", operators: [], queue: [], reqs: [], tickets: [],
+};
+
+function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+
+function screenAuth(){
+  var isSignup = state.authMode === "signup";
+  return (
+    '<div class="authwrap"><div class="authbox">' +
+      '<div style="text-align:center; margin-bottom:20px;"><img src="/logo.png" style="width:48px; height:48px; border-radius:12px; margin-bottom:10px;">' +
+      '<p class="display" style="font-size:18px; font-weight:600; color:#fff;">' + (isSignup?"Create admin account":"Platform admin login") + '</p></div>' +
+      (isSignup ? '<input id="authName" class="field" placeholder="Full name">' : "") +
+      '<input id="authEmail" class="field" placeholder="Email" type="email">' +
+      '<input id="authPassword" class="field" placeholder="Password" type="password">' +
+      (state.authError ? '<div class="errbox">' + esc(state.authError) + '</div>' : "") +
+      '<button id="authSubmit" class="btn btn-primary">' + (isSignup?"Sign up":"Log in") + '</button>' +
+      '<button id="authToggle" style="background:none; border:none; margin-top:12px; font-size:12px; color:var(--slate); text-decoration:underline; display:block; width:100%; text-align:center;">' +
+        (isSignup ? "Already have an account? Log in" : "New admin? Create account") + '</button>' +
+    '</div></div>'
+  );
+}
+
+async function loadAdminData(){
+  var opRes = await sb.from("operators").select("*").order("created_at", { ascending:false });
+  state.operators = opRes.data || [];
+
+  var qRes = await sb.from("category_approvals").select("*, drivers(id, profiles(full_name))").eq("status", "pending");
+  state.queue = qRes.data || [];
+
+  var reqRes = await sb.from("vehicle_category_requirements").select("*");
+  state.reqs = reqRes.data || [];
+
+  var tRes = await sb.from("support_tickets").select("*, operators(display_name)").order("created_at", { ascending:false });
+  state.tickets = tRes.data || [];
+}
+
+function sectionHead(title, desc){ return '<div class="section-head"><div><h2 class="display">' + title + '</h2><p>' + desc + '</p></div></div>'; }
+var NAV = [["overview","Overview"],["operators","Operators"],["approvals","Driver Approvals"],["requirements","Category Requirements"],["support","Support"]];
+
+function renderShell(){
+  var navHtml = NAV.map(function(pair){
+    var count = pair[0]==="approvals" && state.queue.length>0 ? '<span class="nav-count">' + state.queue.length + '</span>' : "";
+    return '<button class="nav-item ' + (state.tab===pair[0]?"active":"") + '" data-tab="' + pair[0] + '">' + pair[1] + count + '</button>';
+  }).join("");
+  document.getElementById("root").innerHTML = (
+    '<div class="app"><aside class="sidebar">' +
+      '<div class="logo-row"><img class="logo-mark" src="/logo.png"><div class="logo-text"><div class="t1">KARTS2ME</div><div class="t2">Platform Admin</div></div></div>' +
+      '<nav class="nav">' + navHtml + '</nav>' +
+      '<div class="admin-card"><p style="color:#fff; font-size:14px; font-weight:600;">' + esc(state.profile.full_name||"Admin") + '</p>' +
+        '<p style="font-size:12px; color:var(--slate); margin-top:2px;">Platform admin</p><button id="logoutBtn">Log out</button></div>' +
+    '</aside><main class="main" id="main"></main></div>'
+  );
+  document.querySelectorAll(".nav-item").forEach(function(btn){ btn.onclick = function(){ state.tab = btn.dataset.tab; render(); }; });
+  document.getElementById("logoutBtn").onclick = async function(){ await sb.auth.signOut(); location.reload(); };
+}
+
+function renderOverview(){
+  var pending = state.operators.filter(function(o){ return o.status==="pending_review"; }).length;
+  return (
+    sectionHead("Platform Overview", "Real data from every operator on the platform.") +
+    '<div class="demo-banner">Approving an operator or driver here writes directly to the production-shaped database — RLS policies mean only accounts with role=platform_admin can do this.</div>' +
+    '<div class="stat-row">' +
+      '<div class="panel stat"><div class="label">Total operators</div><div class="value">' + state.operators.length + '</div></div>' +
+      '<div class="panel stat"><div class="label">Pending review</div><div class="value" style="color:var(--coral)">' + pending + '</div></div>' +
+      '<div class="panel stat"><div class="label">Driver approvals queued</div><div class="value" style="color:var(--gold)">' + state.queue.length + '</div></div>' +
+      '<div class="panel stat"><div class="label">Open tickets</div><div class="value">' + state.tickets.filter(function(t){return t.status!=="resolved";}).length + '</div></div>' +
+    '</div>'
+  );
+}
+
+function renderOperators(){
+  var rows = state.operators.map(function(o){
+    return (
+      '<tr class="clickable" data-op="' + o.id + '"><td style="color:#fff; font-weight:500;">' + esc(o.display_name) + '</td>' +
+      '<td style="color:var(--slate);">' + esc(o.type) + '</td>' +
+      '<td class="mono">' + o.platform_fee_percent + '%</td>' +
+      '<td><span class="badge ' + (o.status==="active"?"b-turf":"b-coral") + '">' + (o.status==="active"?"Active":"Pending review") + '</span></td></tr>'
+    );
+  }).join("");
+  return sectionHead("Operators", "Every operator row, live from the database.") +
+    '<div class="panel" style="overflow-x:auto;"><table><thead><tr><th>Operator</th><th>Type</th><th>Platform fee</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+function openOperatorModal(id){
+  var o = state.operators.find(function(x){ return x.id===id; });
+  if(!o) return;
+  var verifyBtn = !o.verified ? '<button class="btn btn-primary" style="width:auto;" id="verifyBtn">Approve &amp; verify</button>' : "";
+  document.getElementById("modal").innerHTML = (
+    '<div class="modal-head"><h3 class="display">' + esc(o.display_name) + '</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
+    '<div class="modal-body">' +
+      '<p class="field-label">Type</p><p style="margin-bottom:16px;">' + esc(o.type) + '</p>' +
+      '<label style="display:block; margin-bottom:20px;"><span class="field-label">Platform fee override (%)</span>' +
+        '<input type="number" class="field" id="feeOverride" value="' + o.platform_fee_percent + '" style="width:120px;"></label>' +
+      '<div style="display:flex; justify-content:flex-end; gap:10px;"><button class="btn btn-danger" id="feeSave">Save fee</button>' + verifyBtn + '</div>' +
+    '</div>'
+  );
+  document.getElementById("modalBackdrop").classList.remove("hidden");
+  document.getElementById("modalCloseBtn").onclick = closeModal;
+  document.getElementById("feeSave").onclick = async function(){
+    await sb.from("operators").update({ platform_fee_percent: Number(document.getElementById("feeOverride").value) }).eq("id", o.id);
+    closeModal(); await loadAdminData(); render();
+  };
+  var vb = document.getElementById("verifyBtn");
+  if(vb) vb.onclick = async function(){
+    await sb.from("operators").update({ verified:true, status:"active" }).eq("id", o.id);
+    closeModal(); await loadAdminData(); render();
+  };
+}
+
+function renderApprovals(){
+  if(state.queue.length===0){
+    return sectionHead("Driver Category Approvals", "Platform-level review queue.") +
+      '<div class="panel" style="padding:32px; text-align:center; color:var(--slate);">Queue clear — no pending approvals.</div>';
+  }
+  var rows = state.queue.map(function(q){
+    var name = q.drivers && q.drivers.profiles ? q.drivers.profiles.full_name : "Unnamed driver";
+    return (
+      '<div class="panel approval-row"><div style="display:flex; align-items:center; gap:14px;">' +
+        '<div class="avatar">' + (name||"?").split(" ").map(function(n){return n[0];}).join("").slice(0,2) + '</div>' +
+        '<div><p style="font-weight:600; color:#fff;">' + esc(name) + '</p><p style="font-size:12px; color:var(--slate);">Applying for <span class="mono">' + q.category + '</span></p></div></div>' +
+        '<div style="display:flex; gap:8px;"><button class="btn btn-danger reject-btn" data-id="' + q.id + '" style="padding:8px 14px; font-size:12px;">Reject</button>' +
+        '<button class="btn btn-primary approve-btn" data-id="' + q.id + '" style="width:auto; padding:8px 14px; font-size:12px;">Approve</button></div></div>'
+    );
+  }).join("");
+  return sectionHead("Driver Category Approvals", "Real rows — approving here updates category_approvals.status via RLS-gated write.") +
+    '<div style="display:flex; flex-direction:column; gap:12px;">' + rows + '</div>';
+}
+
+function renderRequirements(){
+  var cards = state.reqs.map(function(r){
+    return (
+      '<div class="panel req-card"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">' +
+        '<p class="display" style="font-weight:600; color:#fff;">' + esc(r.label) + '</p><span class="badge b-slate">' + r.category + '</span></div>' +
+        '<label style="display:block; margin-bottom:12px;"><span class="field-label">Min. insurance ($)</span>' +
+          '<input type="number" class="field req-input" data-cat="' + r.category + '" value="' + Math.round(r.min_insurance_cents/100) + '"></label>' +
+        '<label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" class="req-check" data-cat="' + r.category + '" ' + (r.vehicle_inspection_required?"checked":"") + '><span style="font-size:14px;">Vehicle inspection required</span></label></div>'
+    );
+  }).join("");
+  return sectionHead("Category Requirements", "The base eligibility floor every operator inherits — real, editable rows.") +
+    '<div class="req-grid">' + cards + '</div>';
+}
+
+function renderSupport(){
+  var rows = state.tickets.map(function(t){
+    return (
+      '<div class="panel ticket-row"><div><p style="font-weight:600; color:#fff;">' + esc(t.subject) + '</p>' +
+        '<p style="font-size:12px; color:var(--slate); margin-top:2px;">' + esc(t.operators?t.operators.display_name:"—") + '</p></div>' +
+        '<div style="display:flex; align-items:center; gap:8px;"><span class="badge ' + (t.priority==="high"?"b-coral":"b-gold") + '">' + t.priority + '</span>' +
+        '<span class="badge b-slate">' + t.status.replace("_"," ") + '</span>' +
+        (t.status!=="resolved" ? '<button class="btn btn-ghost resolve-btn" data-id="' + t.id + '" style="padding:8px 14px; font-size:12px;">Mark resolved</button>' : "") + '</div></div>'
+    );
+  }).join("");
+  return sectionHead("Support &amp; Disputes", "Real ticket rows from support_tickets.") + '<div style="display:flex; flex-direction:column; gap:12px;">' + rows + '</div>';
+}
+
+function closeModal(){ document.getElementById("modalBackdrop").classList.add("hidden"); }
+
+function render(){
+  if(state.screen==="auth"){ document.getElementById("root").innerHTML = screenAuth(); bindAuth(); return; }
+  if(state.screen==="loading"){ document.getElementById("root").innerHTML = '<div class="authwrap"><p class="mono">Loading…</p></div>'; return; }
+
+  renderShell();
+  var map = { overview:renderOverview, operators:renderOperators, approvals:renderApprovals, requirements:renderRequirements, support:renderSupport };
+  document.getElementById("main").innerHTML = map[state.tab]();
+  bindTab();
+}
+
+function bindAuth(){
+  document.getElementById("authToggle").onclick = function(){ state.authMode = state.authMode==="login"?"signup":"login"; state.authError=null; render(); };
+  document.getElementById("authSubmit").onclick = async function(){
+    var email = document.getElementById("authEmail").value.trim();
+    var password = document.getElementById("authPassword").value;
+    var res;
+    if(state.authMode==="signup"){
+      var name = document.getElementById("authName").value.trim();
+      res = await sb.auth.signUp({ email:email, password:password, options:{ data:{ full_name:name, role:"platform_admin" } } });
+    } else {
+      res = await sb.auth.signInWithPassword({ email:email, password:password });
+    }
+    if(res.error){ state.authError = res.error.message; render(); return; }
+    state.session = res.data.session;
+    await bootstrapProfile();
+  };
+}
+
+function bindTab(){
+  if(state.tab==="operators"){
+    document.querySelectorAll("tr[data-op]").forEach(function(row){ row.onclick = function(){ openOperatorModal(row.dataset.op); }; });
+  }
+  if(state.tab==="approvals"){
+    document.querySelectorAll(".approve-btn").forEach(function(btn){
+      btn.onclick = async function(){
+        await sb.from("category_approvals").update({ status:"approved", approved_at:new Date().toISOString() }).eq("id", btn.dataset.id);
+        await loadAdminData(); render();
+      };
+    });
+    document.querySelectorAll(".reject-btn").forEach(function(btn){
+      btn.onclick = async function(){
+        await sb.from("category_approvals").update({ status:"rejected" }).eq("id", btn.dataset.id);
+        await loadAdminData(); render();
+      };
+    });
+  }
+  if(state.tab==="requirements"){
+    document.querySelectorAll(".req-input").forEach(function(inp){
+      inp.onchange = async function(e){
+        await sb.from("vehicle_category_requirements").update({ min_insurance_cents: Math.round(Number(e.target.value)*100) }).eq("category", e.target.dataset.cat);
+        await loadAdminData(); render();
+      };
+    });
+    document.querySelectorAll(".req-check").forEach(function(cb){
+      cb.onchange = async function(e){
+        await sb.from("vehicle_category_requirements").update({ vehicle_inspection_required: e.target.checked }).eq("category", e.target.dataset.cat);
+        await loadAdminData(); render();
+      };
+    });
+  }
+  if(state.tab==="support"){
+    document.querySelectorAll(".resolve-btn").forEach(function(btn){
+      btn.onclick = async function(){
+        await sb.from("support_tickets").update({ status:"resolved" }).eq("id", btn.dataset.id);
+        await loadAdminData(); render();
+      };
+    });
+  }
+  document.getElementById("modalBackdrop").onclick = function(e){ if(e.target.id==="modalBackdrop") closeModal(); };
+}
+
+async function bootstrapProfile(){
+  var profRes = await sb.from("profiles").select("*").eq("id", state.session.user.id).single();
+  state.profile = profRes.data;
+
+  if(state.profile.role !== "platform_admin"){
+    await sb.from("profiles").update({ role:"platform_admin" }).eq("id", state.session.user.id);
+    state.profile.role = "platform_admin";
+  }
+
+  await loadAdminData();
+  state.screen = "dashboard";
+  render();
+}
+
+async function boot(){
+  var sess = await sb.auth.getSession();
+  state.session = sess.data.session;
+  if(state.session){ await bootstrapProfile(); }
+  else { state.screen = "auth"; render(); }
+}
+
+boot();
+</script>
+</body>
+</html>
