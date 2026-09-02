@@ -478,6 +478,11 @@ function bindAuth(){
       res = await sb.auth.signInWithPassword({ email:email, password:password });
     }
     if(res.error){ state.authError = res.error.message; render(); return; }
+    if(!res.data.session){
+      state.authError = "That email may already have an account. Check your inbox to confirm a new signup, or try logging in instead.";
+      render();
+      return;
+    }
     state.session = res.data.session;
     await bootstrapProfile();
   };

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Karts2Me — Rider</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#073876">
+<meta name="theme-color" content="#0E1A2B">
 <link rel="apple-touch-icon" href="/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -556,6 +556,11 @@ function bind(){
         res = await sb.auth.signInWithPassword({ email:email, password:password });
       }
       if(res.error){ state.authError = res.error.message; render(); return; }
+      if(!res.data.session){
+        state.authError = "That email may already have an account. Check your inbox to confirm a new signup, or try logging in instead.";
+        render();
+        return;
+      }
       state.session = res.data.session;
       await afterAuth();
     };
