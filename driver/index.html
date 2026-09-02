@@ -140,8 +140,47 @@ function screenAuth(){
       '<input id="authPassword" class="field" placeholder="Password" type="password">' +
       (state.authError ? '<div class="errbox">'+esc(state.authError)+'</div>' : "") +
       '<button id="authSubmit" class="btn-primary" style="margin-top:6px;">' + (isSignup?"Sign up":"Log in") + '</button>' +
+      (!isSignup ? '<button id="forgotPasswordLink" style="background:none; border:none; margin-top:12px; font-size:13px; color:var(--slate); text-decoration:underline; display:block; width:100%; text-align:center;">Forgot password?</button>' : "") +
       '<button id="authToggle" style="background:none; border:none; margin-top:14px; font-size:13px; color:var(--slate); text-decoration:underline;">' +
         (isSignup ? "Already driving? Log in" : "New driver? Create an account") + '</button>' +
+    '</div>'
+  );
+}
+
+function screenForgotPassword(){
+  return (
+    '<div style="height:100%; display:flex; flex-direction:column; justify-content:center; padding:0 28px;">' +
+      '<div style="text-align:center; margin-bottom:24px;">' +
+        '<img src="/logo.png" style="width:56px; height:56px; border-radius:14px; margin-bottom:12px;">' +
+      '</div>' +
+      (state.forgotSent ?
+        '<p class="display" style="font-size:18px; text-align:center; margin-bottom:8px;">Check your email</p>' +
+        '<p style="font-size:13px; color:var(--slate); text-align:center; line-height:1.5; margin-bottom:22px;">If an account exists for that email, we sent a link to reset your password.</p>' +
+        '<button id="backToLoginBtn" class="btn-primary">Back to login</button>'
+        :
+        '<p class="display" style="font-size:18px; text-align:center; margin-bottom:4px;">Reset your password</p>' +
+        '<p style="font-size:13px; color:var(--slate); text-align:center; margin-bottom:22px;">Enter your email and we\'ll send you a reset link.</p>' +
+        '<input id="forgotEmail" class="field" placeholder="Email" type="email">' +
+        (state.authError ? '<div class="errbox">'+esc(state.authError)+'</div>' : "") +
+        '<button id="forgotSubmit" class="btn-primary" style="margin-top:14px;">Send reset link</button>' +
+        '<button id="backToLoginBtn" style="background:none; border:none; margin-top:14px; font-size:13px; color:var(--slate); text-decoration:underline; display:block; width:100%; text-align:center;">Back to login</button>'
+      ) +
+    '</div>'
+  );
+}
+
+function screenResetPassword(){
+  return (
+    '<div style="height:100%; display:flex; flex-direction:column; justify-content:center; padding:0 28px;">' +
+      '<div style="text-align:center; margin-bottom:24px;">' +
+        '<img src="/logo.png" style="width:56px; height:56px; border-radius:14px; margin-bottom:12px;">' +
+      '</div>' +
+      '<p class="display" style="font-size:18px; text-align:center; margin-bottom:4px;">Set a new password</p>' +
+      '<p style="font-size:13px; color:var(--slate); text-align:center; margin-bottom:22px;">Choose a new password for your account.</p>' +
+      '<input id="newPassword" class="field" placeholder="New password" type="password" style="margin-bottom:10px;">' +
+      '<input id="confirmPassword" class="field" placeholder="Confirm new password" type="password">' +
+      (state.authError ? '<div class="errbox">'+esc(state.authError)+'</div>' : "") +
+      '<button id="resetSubmit" class="btn-primary" style="margin-top:14px;">Set new password</button>' +
     '</div>'
   );
 }
@@ -374,6 +413,8 @@ function render(){
   var screenEl = document.getElementById("screen");
   if(state.screen==="loading"){ screenEl.className="screen full"; screenEl.innerHTML = screenLoading(); renderBottomNav(); return; }
   if(state.screen==="auth"){ screenEl.className="screen full"; screenEl.innerHTML = screenAuth(); bindAuth(); renderBottomNav(); return; }
+  if(state.screen==="forgotPassword"){ screenEl.className="screen full"; screenEl.innerHTML = screenForgotPassword(); bindForgotPassword(); renderBottomNav(); return; }
+  if(state.screen==="resetPassword"){ screenEl.className="screen full"; screenEl.innerHTML = screenResetPassword(); bindResetPassword(); renderBottomNav(); return; }
   if(state.screen==="terms"){ screenEl.className="screen full"; screenEl.innerHTML = screenTerms(); bindTerms(); renderBottomNav(); return; }
   if(state.screen==="apply"){ screenEl.className="screen full"; screenEl.innerHTML = screenApply(); bindApply(); renderBottomNav(); return; }
   if(state.screen==="status"){ screenEl.className="screen full"; screenEl.innerHTML = screenStatus(); bindStatus(); renderBottomNav(); return; }
@@ -393,6 +434,8 @@ function render(){
 
 function bindAuth(){
   document.getElementById("authToggle").onclick = function(){ state.authMode = state.authMode==="login"?"signup":"login"; state.authError=null; render(); };
+  var forgotLink = document.getElementById("forgotPasswordLink");
+  if(forgotLink) forgotLink.onclick = function(){ state.authError=null; state.forgotSent=false; go("forgotPassword"); };
   document.getElementById("authSubmit").onclick = async function(){
     var email = document.getElementById("authEmail").value.trim();
     var password = document.getElementById("authPassword").value;
@@ -410,6 +453,34 @@ function bindAuth(){
       return;
     }
     state.session = res.data.session;
+    await afterAuth();
+  };
+}
+
+function bindForgotPassword(){
+  var backBtn = document.getElementById("backToLoginBtn");
+  if(backBtn) backBtn.onclick = function(){ state.authError=null; go("auth"); };
+  var forgotSubmitBtn = document.getElementById("forgotSubmit");
+  if(forgotSubmitBtn) forgotSubmitBtn.onclick = async function(){
+    var email = document.getElementById("forgotEmail").value.trim();
+    if(!email){ state.authError = "Enter your email address."; render(); return; }
+    var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+    if(res.error){ state.authError = res.error.message; render(); return; }
+    state.authError = null;
+    state.forgotSent = true;
+    render();
+  };
+}
+
+function bindResetPassword(){
+  document.getElementById("resetSubmit").onclick = async function(){
+    var pw = document.getElementById("newPassword").value;
+    var confirm = document.getElementById("confirmPassword").value;
+    if(pw.length < 6){ state.authError = "Password must be at least 6 characters."; render(); return; }
+    if(pw !== confirm){ state.authError = "Passwords don't match."; render(); return; }
+    var res = await sb.auth.updateUser({ password: pw });
+    if(res.error){ state.authError = res.error.message; render(); return; }
+    state.authError = null;
     await afterAuth();
   };
 }
@@ -525,7 +596,18 @@ async function afterAuth(){
   render();
 }
 
+var recoveryHandled = false;
+sb.auth.onAuthStateChange(function(event, session){
+  if(event === "PASSWORD_RECOVERY"){
+    recoveryHandled = true;
+    state.session = session;
+    go("resetPassword");
+  }
+});
+
 async function boot(){
+  await new Promise(function(resolve){ setTimeout(resolve, 150); });
+  if(recoveryHandled) return;
   var sess = await sb.auth.getSession();
   state.session = sess.data.session;
   if(state.session){ await afterAuth(); }
