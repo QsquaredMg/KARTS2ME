@@ -109,7 +109,6 @@
 var SUPABASE_URL = "https://ajmtwylkhmwoistuewox.supabase.co";
 var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqbXR3eWxraG13b2lzdHVld294Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDQzNjEsImV4cCI6MjEwMzU4MDM2MX0.TbUinkDkL9t_N_4NS26OFF8zX6hSawxWufqGRm65rKk";
 var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-var DEMO_OPERATOR_ID = "00000000-0000-0000-0000-000000000001";
 
 var vehicleCategories = [
   { key:"golf_cart", label:"Golf Cart" }, { key:"shuttle_van", label:"Shuttle Van" },
@@ -451,6 +450,14 @@ function closeModal(){ document.getElementById("modalBackdrop").classList.add("h
 function render(){
   if(state.screen==="auth"){ document.getElementById("root").innerHTML = screenAuth(); bindAuth(); return; }
   if(state.screen==="loading"){ document.getElementById("root").innerHTML = '<div class="authwrap"><p class="mono">Loading…</p></div>'; return; }
+  if(state.screen==="denied"){
+    document.getElementById("root").innerHTML =
+      '<div class="authwrap"><div class="authcard"><p class="display" style="font-size:18px; margin-bottom:8px;">Not yet linked to an operator</p>' +
+      '<p style="font-size:13px; color:var(--slate); line-height:1.5; margin-bottom:16px;">Your account isn\'t connected to a Karts2Me operator yet. Contact Karts2Me to get your property set up, and you\'ll be linked to your operator dashboard from there.</p>' +
+      '<button id="deniedSignOut" class="btn-ghost">Sign out</button></div></div>';
+    document.getElementById("deniedSignOut").onclick = async function(){ await sb.auth.signOut(); state.screen="auth"; render(); };
+    return;
+  }
 
   renderShell();
   var map = { overview:renderOverview, zones:renderZones, fleet:renderFleet, events:renderEvents, drivers:renderDrivers, pricing:renderPricing, branding:renderBranding };
@@ -466,7 +473,7 @@ function bindAuth(){
     var res;
     if(state.authMode==="signup"){
       var name = document.getElementById("authName").value.trim();
-      res = await sb.auth.signUp({ email:email, password:password, options:{ data:{ full_name:name, role:"operator_staff" } } });
+      res = await sb.auth.signUp({ email:email, password:password, options:{ data:{ full_name:name } } });
     } else {
       res = await sb.auth.signInWithPassword({ email:email, password:password });
     }
@@ -507,11 +514,10 @@ async function bootstrapProfile(){
   var profRes = await sb.from("profiles").select("*").eq("id", state.session.user.id).single();
   state.profile = profRes.data;
 
-  // Demo bootstrap: link this account to the demo operator if not already linked.
-  // In production this would come from an approved operator application, not an auto-link.
-  if(!state.profile.operator_id){
-    await sb.from("profiles").update({ operator_id: DEMO_OPERATOR_ID, role: "operator_staff" }).eq("id", state.session.user.id);
-    state.profile.operator_id = DEMO_OPERATOR_ID;
+  if(!state.profile || !state.profile.operator_id){
+    state.screen = "denied";
+    render();
+    return;
   }
 
   await loadOperatorData();

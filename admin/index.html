@@ -264,6 +264,14 @@ function closeModal(){ document.getElementById("modalBackdrop").classList.add("h
 function render(){
   if(state.screen==="auth"){ document.getElementById("root").innerHTML = screenAuth(); bindAuth(); return; }
   if(state.screen==="loading"){ document.getElementById("root").innerHTML = '<div class="authwrap"><p class="mono">Loading…</p></div>'; return; }
+  if(state.screen==="denied"){
+    document.getElementById("root").innerHTML =
+      '<div class="authwrap"><div class="authcard"><p class="display" style="font-size:18px; margin-bottom:8px;">Access denied</p>' +
+      '<p style="font-size:13px; color:var(--slate); line-height:1.5; margin-bottom:16px;">This account does not have platform admin access. Contact your Karts2Me administrator if you believe this is a mistake.</p>' +
+      '<button id="deniedSignOut" class="btn-ghost">Sign out</button></div></div>';
+    document.getElementById("deniedSignOut").onclick = async function(){ await sb.auth.signOut(); state.screen="auth"; render(); };
+    return;
+  }
 
   renderShell();
   var map = { overview:renderOverview, operators:renderOperators, approvals:renderApprovals, requirements:renderRequirements, support:renderSupport };
@@ -279,7 +287,7 @@ function bindAuth(){
     var res;
     if(state.authMode==="signup"){
       var name = document.getElementById("authName").value.trim();
-      res = await sb.auth.signUp({ email:email, password:password, options:{ data:{ full_name:name, role:"platform_admin" } } });
+      res = await sb.auth.signUp({ email:email, password:password, options:{ data:{ full_name:name } } });
     } else {
       res = await sb.auth.signInWithPassword({ email:email, password:password });
     }
@@ -336,9 +344,10 @@ async function bootstrapProfile(){
   var profRes = await sb.from("profiles").select("*").eq("id", state.session.user.id).single();
   state.profile = profRes.data;
 
-  if(state.profile.role !== "platform_admin"){
-    await sb.from("profiles").update({ role:"platform_admin" }).eq("id", state.session.user.id);
-    state.profile.role = "platform_admin";
+  if(!state.profile || state.profile.role !== "platform_admin"){
+    state.screen = "denied";
+    render();
+    return;
   }
 
   await loadAdminData();
