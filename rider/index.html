@@ -15,15 +15,17 @@
 <script src="https://js.stripe.com/v3/"></script>
 <style>
   :root{
-    --ink:#0E1A2B; --ink-2:#16263D; --cream:#FAF7F0; --card:#FFFFFF;
-    --gold:#E8A83C; --coral:#E85D3F; --turf:#3D7A4D; --slate:#64748B; --slate-100:#E7E9ED;
+    --ink:#073876; --ink-2:#052C5C; --cream:#FFFFFF; --card:#FFFFFF;
+    --orange:#FA8411; --orange-light:#FEE9D6; --coral:#E85D3F; --turf:#3D7A4D;
+    --slate:#64748B; --slate-100:#E7E9ED; --bg-light:#F8F7F7; --text:#212431;
+    --gold:#FA8411;
   }
   *{box-sizing:border-box;}
-  html,body{margin:0; background:#DCD7CB; font-family:'Inter',sans-serif; color:var(--ink); -webkit-text-size-adjust:100%;}
+  html,body{margin:0; background:#E7E9ED; font-family:'Inter',sans-serif; color:var(--text); -webkit-text-size-adjust:100%;}
   h1,h2,h3,p{margin:0;}
   button,select,input{font-family:inherit;}
-  .display{font-family:'Space Grotesk',sans-serif;}
-  .mono{font-family:'IBM Plex Mono',monospace;}
+  .display{font-family:'Inter',sans-serif; font-weight:700; color:var(--ink);}
+  .mono{font-family:'Inter',sans-serif; font-variant-numeric:tabular-nums;}
 
   body{display:flex; align-items:flex-start; justify-content:center; min-height:100vh; padding:24px 0;}
   .phone{ width:390px; max-width:100vw; height:844px; max-height:92vh; background:var(--cream); overflow:hidden; position:relative; margin:0 auto; }
@@ -33,15 +35,15 @@
   .screen{ position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch; }
 
   .badge{display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; padding:3px 12px 3px 9px; clip-path: polygon(8% 0, 92% 0, 100% 50%, 92% 100%, 8% 100%, 0 50%);}
-  .b-turf{background:#E7F3E9; color:#3D7A4D;} .b-gold{background:#FBF0DC; color:#B87A16;}
-  .b-coral{background:#FBE7E1; color:#C24B31;} .b-slate{background:#EEF0F3; color:#5B6472;} .b-ink{background:#0E1A2B; color:#fff;}
+  .b-turf{background:#E7F3E9; color:#3D7A4D;} .b-gold{background:var(--orange-light); color:#B85C0A;}
+  .b-coral{background:#FBE7E1; color:#C24B31;} .b-slate{background:#EEF0F3; color:#5B6472;} .b-ink{background:var(--ink); color:#fff;}
 
   .sheet{ position:absolute; left:0; right:0; bottom:0; background:#fff; border-radius:24px 24px 0 0; box-shadow:0 -8px 30px rgba(14,26,43,0.15); }
   .btn-primary{background:var(--ink); color:#fff; border-radius:14px; font-weight:600; border:none; width:100%; padding:16px; font-size:15px;}
   .btn-primary:disabled{background:var(--slate-100); color:var(--slate);}
   .btn-ghost{background:#F3F1EB; border-radius:14px; font-weight:600; border:none; width:100%; padding:16px; font-size:14px;}
   .pulse-ring{position:relative;}
-  .pulse-ring::after{content:''; position:absolute; inset:-6px; border-radius:9999px; border:2px solid var(--turf); opacity:0; animation:pr 1.8s ease-out infinite;}
+  .pulse-ring::after{content:''; position:absolute; inset:-6px; border-radius:9999px; border:2px solid var(--orange); opacity:0; animation:pr 1.8s ease-out infinite;}
   @keyframes pr{0%{opacity:.6; transform:scale(.7);} 100%{opacity:0; transform:scale(1.8);}}
   .seat-dot{ width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; border:2px solid var(--slate-100); background:#fff; cursor:pointer; }
   .topbar{ display:flex; align-items:center; justify-content:space-between; padding:48px 20px 12px; }
@@ -155,13 +157,31 @@ function fareTotal(){
 
 function screenAuth(){
   var isSignup = state.authMode === "signup";
+  var features = [
+    { icon:"&#128205;", label:"Multiple Rides", sub:"Golf carts, cars &amp; vans" },
+    { icon:"&#9200;", label:"Quick Booking", sub:"Book in seconds" },
+    { icon:"&#9733;", label:"Safe &amp; Reliable", sub:"Verified drivers" },
+  ];
   return (
-    '<div style="height:100%; display:flex; flex-direction:column; justify-content:center; padding:0 28px;">' +
-      '<div style="text-align:center; margin-bottom:28px;">' +
-        '<img src="/logo.png" style="width:64px; height:64px; border-radius:16px; margin-bottom:14px;">' +
-        '<p class="display" style="font-size:20px; font-weight:600;">' + (isSignup ? "Create your account" : "Welcome back") + '</p>' +
-        '<p style="font-size:13px; color:var(--slate); margin-top:4px;">' + (isSignup ? "Book carts and shuttles in seconds" : "Log in to keep riding") + '</p>' +
+    '<div style="height:100%; display:flex; flex-direction:column; justify-content:center; padding:32px 28px; overflow-y:auto;">' +
+      '<div style="text-align:center; margin-bottom:20px;">' +
+        '<img src="/logo.png" style="width:96px; height:96px; margin-bottom:10px;">' +
       '</div>' +
+      (isSignup ?
+        '<p class="display" style="font-size:20px; text-align:center; margin-bottom:4px;">Create your account</p>' +
+        '<p style="font-size:13px; color:var(--slate); text-align:center; margin-bottom:22px;">Book carts and shuttles in seconds</p>'
+        :
+        '<p class="display" style="font-size:26px; line-height:1.15; text-align:center; margin-bottom:14px;">Your Ride,<br><span style="color:var(--orange);">On Time,</span><br>Every Time.</p>' +
+        '<p style="font-size:13px; color:var(--slate); text-align:center; line-height:1.5; margin-bottom:22px;">Book golf carts, cars or vans in seconds. Safe, reliable and always near you.</p> ' +
+        '<div style="display:flex; flex-direction:column; gap:14px; margin-bottom:26px;">' +
+          features.map(function(f){
+            return '<div style="display:flex; align-items:center; gap:12px;">' +
+              '<div style="width:40px; height:40px; border-radius:99px; background:var(--ink); color:#fff; display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0;">' + f.icon + '</div>' +
+              '<div><p style="font-size:14px; font-weight:700; color:var(--ink);">' + f.label + '</p><p style="font-size:12px; color:var(--slate);">' + f.sub + '</p></div>' +
+            '</div>';
+          }).join("") +
+        '</div>'
+      ) +
       (isSignup ? '<input id="authName" class="field" placeholder="Full name" style="margin-bottom:10px;">' : "") +
       '<input id="authEmail" class="field" placeholder="Email" type="email" style="margin-bottom:10px;">' +
       '<input id="authPassword" class="field" placeholder="Password" type="password" style="margin-bottom:6px;">' +
@@ -209,7 +229,7 @@ function mountMap(elId){
   if(mapInstance){ mapInstance.remove(); mapInstance = null; }
   var m = L.map(elId, { zoomControl:false, attributionControl:false }).setView(ZONE_CENTER, 16);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom:19 }).addTo(m);
-  var youIcon = L.divIcon({ className:'', html:'<div class="k2-pin pulse-ring" style="background:#E8A83C;"></div>' });
+  var youIcon = L.divIcon({ className:'', html:'<div class="k2-pin pulse-ring" style="background:var(--orange);"></div>' });
   L.marker(ZONE_CENTER, { icon: youIcon }).addTo(m);
   state.pois.forEach(function(p){
     var icon = L.divIcon({ className:'', html:'<div class="k2-pin" style="background:#3D7A4D;"></div>' });
@@ -227,7 +247,7 @@ function screenHome(){
         '<button id="logoutBtn" style="width:36px; height:36px; border-radius:99px; background:var(--ink); color:#fff; border:none; font-size:14px;">&#9099;</button>' +
       '</div>' +
       '<div style="margin:0 20px; height:260px; border-radius:24px; overflow:hidden;"><div id="homeMap" style="width:100%; height:100%;"></div></div>' +
-      (Notification && Notification.permission!=="granted" ? '<div style="padding:0 20px; margin-top:12px;"><div class="card" style="padding:14px; background:#FBF0DC; box-shadow:none;">' +
+      (Notification && Notification.permission!=="granted" ? '<div style="padding:0 20px; margin-top:12px;"><div class="card" style="padding:14px; background:var(--orange-light); box-shadow:none;">' +
         '<p style="font-size:13px; font-weight:600;">Get ride updates instantly</p>' +
         '<p style="font-size:12px; color:var(--slate); margin:2px 0 8px;">We will notify you when a driver accepts.</p>' +
         '<button id="enablePushBtn" class="btn-ghost" style="padding:8px;">Enable notifications</button></div></div>' : "") +
@@ -274,10 +294,10 @@ function screenMode(){
         '<p class="display" style="font-size:18px; font-weight:600; margin-bottom:16px;">' + esc(state.dest) + '</p>' +
         '<div style="display:flex; flex-direction:column; gap:10px;">' +
           opts.map(function(o){
-            return '<button class="mode-btn" data-mode="' + o.key + '" style="width:100%; display:flex; align-items:center; justify-content:space-between; border-radius:16px; padding:14px 16px; border:2px solid ' + (o.free?"var(--gold)":"var(--slate-100)") + '; background:' + (o.free?"#FBF0DC":"#fff") + '; text-align:left;">' +
-              '<div style="display:flex; align-items:center; gap:10px;"><span style="font-size:20px;">' + o.icon + '</span><div><p style="font-size:14px; font-weight:600;">' + o.label + '</p>' +
+            return '<button class="mode-btn" data-mode="' + o.key + '" style="width:100%; display:flex; align-items:center; justify-content:space-between; border-radius:16px; padding:12px 16px; border:2px solid ' + (o.free?"var(--orange)":"var(--slate-100)") + '; background:' + (o.free?"var(--orange-light)":"#fff") + '; text-align:left;">' +
+              '<div style="display:flex; align-items:center; gap:12px;"><div style="width:40px; height:40px; border-radius:99px; background:var(--ink); color:#fff; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0;">' + o.icon + '</div><div><p style="font-size:14px; font-weight:700; color:var(--ink);">' + o.label + '</p>' +
               (o.eta ? '<p style="font-size:12px; color:var(--slate);">' + o.eta + ' away</p>' : '') + '</div></div>' +
-              '<p class="mono" style="font-size:14px; font-weight:600;">' + o.price + '</p></button>';
+              '<p class="mono" style="font-size:14px; font-weight:700; color:' + (o.free?"var(--orange)":"var(--ink)") + ';">' + o.price + '</p></button>';
           }).join("") +
         '</div>' +
       '</div>' +
@@ -301,7 +321,7 @@ function screenConfirm(){
         Array.from({length:CAPACITY}).map(function(_, i){
           var active = !state.buyout && state.seats===i+1;
           var filled = !state.buyout && state.seats>=i+1;
-          return '<button class="seat-btn" data-seat="' + (i+1) + '" style="border-color:' + (active?"var(--gold)":"var(--slate-100)") + '; background:' + (filled?"#FBF0DC":"#fff") + '; width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-family:\'IBM Plex Mono\',monospace; font-size:12px; font-weight:600; border-width:2px; border-style:solid;">' + (i+1) + '</button>';
+          return '<button class="seat-btn" data-seat="' + (i+1) + '" style="border-color:' + (active?"var(--gold)":"var(--slate-100)") + '; background:' + (filled?"#FBF0DC":"#fff") + '; width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; border-width:2px; border-style:solid;">' + (i+1) + '</button>';
         }).join("") +
         '<button id="buyoutBtn" style="margin-left:8px; padding:8px 12px; border-radius:8px; font-size:12px; font-weight:600; border:none; background:' + (state.buyout?"var(--ink)":"#F3F1EB") + '; color:' + (state.buyout?"#fff":"var(--ink)") + ';">Buy out</button>' +
       '</div>' +
@@ -444,7 +464,7 @@ function screenMatching(){
   });
   return (
     '<div style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 32px; text-align:center;">' +
-      '<div class="pulse-ring" style="width:80px; height:80px; border-radius:99px; background:#FBF0DC; display:flex; align-items:center; justify-content:center; margin-bottom:24px; color:var(--turf);"><span style="font-size:30px;">&#128663;</span></div>' +
+      '<div class="pulse-ring" style="width:80px; height:80px; border-radius:99px; background:var(--ink); display:flex; align-items:center; justify-content:center; margin-bottom:24px; color:#fff;"><span style="font-size:30px;">&#128663;</span></div>' +
       '<p class="display" style="font-size:18px; font-weight:600;">Finding your cart&hellip;</p>' +
       '<p style="font-size:14px; color:var(--slate); margin-top:4px;">Matching you with the nearest available driver</p>' +
       '<p style="font-size:11px; color:var(--slate); margin-top:16px;" class="mono">Ride record created in database</p>' +
@@ -458,14 +478,22 @@ function screenActive(){
       '<div style="flex:1; position:relative;"><div id="activeMap" style="width:100%; height:100%;"></div>' +
         '<div style="position:absolute; top:48px; left:20px;"><span class="badge b-gold">ETA ' + state.eta + ' min</span></div></div>' +
       '<div style="background:#fff; border-radius:24px 24px 0 0; margin-top:-24px; position:relative; z-index:1; padding:20px;">' +
-        '<div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">' +
-          '<div style="width:48px; height:48px; border-radius:99px; background:var(--ink); color:#fff; display:flex; align-items:center; justify-content:center; font-family:\'IBM Plex Mono\',monospace; font-size:14px; font-weight:600;">' + DRIVER.photo + '</div>' +
-          '<div style="flex:1;"><p style="font-size:14px; font-weight:600;">' + DRIVER.name + ' &middot; &#9733; ' + DRIVER.rating + '</p><p style="font-size:12px; color:var(--slate);">' + DRIVER.vehicle + '</p></div>' +
-          '<button style="width:40px; height:40px; border-radius:99px; background:#F3F1EB; border:none;">&#128172;</button>' +
+        '<div style="display:flex; align-items:center; gap:10px; margin-bottom:18px;">' +
+          '<div style="width:48px; height:48px; border-radius:99px; background:var(--ink); color:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700;">' + DRIVER.photo + '</div>' +
+          '<div style="flex:1;"><p style="font-size:14px; font-weight:700; color:var(--ink);">' + DRIVER.name + '</p><p style="font-size:12px; color:var(--slate);">' + DRIVER.vehicle + '</p></div>' +
+          '<span style="font-size:13px; font-weight:700; color:var(--orange);">&#9733; ' + DRIVER.rating + '</span>' +
         '</div>' +
-        '<p style="font-size:12px; color:var(--slate); margin-bottom:16px;">Heading to ' + esc(state.dest) + ' &middot; <span class="mono">ride #' + (state.currentRideId ? state.currentRideId.slice(0,8) : "&hellip;") + '</span></p>' +
-        '<div style="display:flex; gap:10px;"><button class="btn-ghost" style="flex:1; padding:12px; font-size:12px;">SOS</button><button class="btn-ghost" style="flex:1; padding:12px; font-size:12px;">Share trip</button></div>' +
-        '<button id="simArrival" style="width:100%; margin-top:12px; background:none; border:none; font-size:12px; text-decoration:underline; color:var(--slate);">(dev) simulate arrival &mdash; matching is simulated, no live driver app yet</button>' +
+        '<div style="background:var(--bg-light); border-radius:14px; padding:14px 16px; display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">' +
+          '<div><p style="font-size:11px; color:var(--slate); margin-bottom:2px;">Pickup Location</p><p style="font-size:13px; font-weight:700; color:var(--ink);">Current location</p></div>' +
+          '<div><p style="font-size:11px; color:var(--slate); margin-bottom:2px;">Drop-off Location</p><p style="font-size:13px; font-weight:700; color:var(--ink);">' + esc(state.dest) + '</p></div>' +
+        '</div>' +
+        '<div style="background:var(--bg-light); border-radius:14px; padding:14px 16px; display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:18px;">' +
+          '<div><p style="font-size:11px; color:var(--slate); margin-bottom:2px;">Ride</p><p style="font-size:13px; font-weight:700; color:var(--ink);" class="mono">#' + (state.currentRideId ? state.currentRideId.slice(0,8) : "&hellip;") + '</p></div>' +
+          '<div><p style="font-size:11px; color:var(--slate); margin-bottom:2px;">Payment</p><p style="font-size:13px; font-weight:700; color:var(--ink);">Card on file</p></div>' +
+        '</div>' +
+        '<button class="btn-primary" style="margin-bottom:10px;">Contact Driver</button>' +
+        '<button id="simArrival" style="width:100%; background:none; border:none; font-size:13px; color:var(--coral); font-weight:600;">Cancel Ride</button>' +
+        '<p style="font-size:10px; color:var(--slate); text-align:center; margin-top:10px;">(dev) button above simulates arrival &mdash; no live driver app yet</p>' +
       '</div>' +
     '</div>'
   );
