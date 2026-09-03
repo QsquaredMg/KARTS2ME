@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Karts2Me Admin — Offline</title>
+<meta name="theme-color" content="#052C5C">
+<style>
+  html,body{ margin:0; height:100%; background:#052C5C; font-family:'Inter',-apple-system,sans-serif; }
+  .wrap{ min-height:100dvh; display:flex; align-items:center; justify-content:center; padding:24px; }
+  .card{ max-width:360px; text-align:center; background:#0D2A52; border:1px solid #1E3A63; border-radius:24px; padding:36px 28px; }
+  img{ width:64px; height:64px; margin-bottom:16px; }
+  h1{ font-size:19px; font-weight:700; color:#fff; margin:0 0 8px; }
+  p{ font-size:13px; color:#7C8AA0; line-height:1.5; margin:0 0 20px; }
+  button{ background:#FA8411; color:#052C5C; border:none; border-radius:14px; font-weight:600; padding:14px 24px; font-size:14px; cursor:pointer; width:100%; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <img src="/icon-192.png" alt="Karts2Me">
+    <h1>You're offline</h1>
+    <p>The platform admin dashboard needs a connection to load live data. Check your connection and try again.</p>
+    <button onclick="location.reload()">Retry</button>
+  </div>
+</div>
+</body>
+</html>

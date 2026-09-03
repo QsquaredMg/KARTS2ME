@@ -4,7 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Karts2Me — Operator Dashboard</title>
-<link rel="apple-touch-icon" href="/logo.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#073876">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -230,6 +232,7 @@ function renderShell(){
         '<div class="op-card"><div class="name">' + esc(state.operator.display_name) + '</div>' +
           '<span class="badge ' + (state.operator.verified?"b-turf":"b-coral") + '">' + (state.operator.verified?"Verified":"Pending review") + '</span>' +
           (state.isSuperAdmin ? '<button id="switchOperatorBtn">Switch operator</button>' : "") +
+          (deferredInstallPrompt && !isStandalone() ? '<button id="installAppBtn">Install app</button>' : "") +
           '<button id="logoutBtn">Log out</button></div>' +
       '</aside>' +
       '<main class="main" id="main"></main>' +
@@ -237,6 +240,14 @@ function renderShell(){
   );
   document.querySelectorAll(".nav-item").forEach(function(btn){ btn.onclick = function(){ state.tab = btn.dataset.tab; render(); }; });
   document.getElementById("logoutBtn").onclick = async function(){ await sb.auth.signOut(); location.reload(); };
+  var installBtn = document.getElementById("installAppBtn");
+  if(installBtn) installBtn.onclick = async function(){
+    if(!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    render();
+  };
   var switchBtn = document.getElementById("switchOperatorBtn");
   if(switchBtn) switchBtn.onclick = async function(){
     var opsRes = await sb.from("operators").select("id,display_name,zone_display_name,status").order("display_name");
@@ -734,6 +745,20 @@ function screenChooseOperator(){
   );
 }
 
+var deferredInstallPrompt = null;
+window.addEventListener("beforeinstallprompt", function(e){
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  if(state.screen === "dashboard") render();
+});
+window.addEventListener("appinstalled", function(){
+  deferredInstallPrompt = null;
+  if(state.screen === "dashboard") render();
+});
+function isStandalone(){
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
 var recoveryHandled = false;
 sb.auth.onAuthStateChange(function(event, session){
   if(event === "PASSWORD_RECOVERY"){
@@ -751,6 +776,10 @@ async function boot(){
   state.session = sess.data.session;
   if(state.session){ await bootstrapProfile(); }
   else { state.screen = "auth"; render(); }
+}
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
 }
 
 boot();

@@ -4,7 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Karts2Me — Platform Admin</title>
-<link rel="apple-touch-icon" href="/logo.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#052C5C">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -188,11 +190,21 @@ function renderShell(){
       '<div class="logo-row"><img class="logo-mark" src="/logo.png"><div class="logo-text"><div class="t1">KARTS2ME</div><div class="t2">Platform Admin</div></div></div>' +
       '<nav class="nav">' + navHtml + '</nav>' +
       '<div class="admin-card"><p style="color:#fff; font-size:14px; font-weight:600;">' + esc(state.profile.full_name||"Admin") + '</p>' +
-        '<p style="font-size:12px; color:var(--slate); margin-top:2px;">Platform admin</p><button id="logoutBtn">Log out</button></div>' +
+        '<p style="font-size:12px; color:var(--slate); margin-top:2px;">Platform admin</p>' +
+        (deferredInstallPrompt && !isStandalone() ? '<button id="installAppBtn">Install app</button>' : "") +
+        '<button id="logoutBtn">Log out</button></div>' +
     '</aside><main class="main" id="main"></main></div>'
   );
   document.querySelectorAll(".nav-item").forEach(function(btn){ btn.onclick = function(){ state.tab = btn.dataset.tab; render(); }; });
   document.getElementById("logoutBtn").onclick = async function(){ await sb.auth.signOut(); location.reload(); };
+  var installBtn = document.getElementById("installAppBtn");
+  if(installBtn) installBtn.onclick = async function(){
+    if(!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    render();
+  };
 }
 
 function renderOverview(){
@@ -427,6 +439,20 @@ async function bootstrapProfile(){
   render();
 }
 
+var deferredInstallPrompt = null;
+window.addEventListener("beforeinstallprompt", function(e){
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  if(state.screen === "dashboard") render();
+});
+window.addEventListener("appinstalled", function(){
+  deferredInstallPrompt = null;
+  if(state.screen === "dashboard") render();
+});
+function isStandalone(){
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
 var recoveryHandled = false;
 sb.auth.onAuthStateChange(function(event, session){
   if(event === "PASSWORD_RECOVERY"){
@@ -444,6 +470,10 @@ async function boot(){
   state.session = sess.data.session;
   if(state.session){ await bootstrapProfile(); }
   else { state.screen = "auth"; render(); }
+}
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
 }
 
 boot();

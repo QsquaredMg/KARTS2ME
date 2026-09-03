@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Karts2Me Driver — Offline</title>
+<meta name="theme-color" content="#073876">
+<style>
+  html,body{ margin:0; height:100%; background:#E7E9ED; font-family:'Inter',-apple-system,sans-serif; }
+  .wrap{ min-height:100dvh; display:flex; align-items:center; justify-content:center; padding:24px; }
+  .card{ max-width:340px; text-align:center; background:#fff; border-radius:24px; padding:36px 28px; box-shadow:0 20px 60px -20px rgba(14,26,43,0.25); }
+  img{ width:64px; height:64px; margin-bottom:16px; }
+  h1{ font-size:19px; font-weight:700; color:#073876; margin:0 0 8px; }
+  p{ font-size:13px; color:#64748B; line-height:1.5; margin:0 0 20px; }
+  button{ background:#073876; color:#fff; border:none; border-radius:14px; font-weight:600; padding:14px 24px; font-size:14px; cursor:pointer; width:100%; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <img src="/icon-192.png" alt="Karts2Me">
+    <h1>You're offline</h1>
+    <p>Karts2Me Driver needs a connection to load ride requests. Check your connection and try again.</p>
+    <button onclick="location.reload()">Retry</button>
+  </div>
+</div>
+</body>
+</html>
