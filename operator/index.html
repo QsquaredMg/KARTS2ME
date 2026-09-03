@@ -123,6 +123,7 @@ var state = {
   screen: "loading", authMode: "login", authError: null, session: null, profile: null, operator: null,
   tab: "overview", zones: [], vehicleTypes: [], events: [], approvedDrivers: [], pricing: null,
   eventDraft: null,
+  isSuperAdmin: false, allOperators: [], activeOperatorId: null,
 };
 
 function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
@@ -184,8 +185,7 @@ function screenResetPassword(){
 
 /* ---------- DATA LOADING ---------- */
 
-async function loadOperatorData(){
-  var opId = state.profile.operator_id;
+async function loadOperatorData(opId){
   var opRes = await sb.from("operators").select("*").eq("id", opId).single();
   state.operator = opRes.data;
 
@@ -229,6 +229,7 @@ function renderShell(){
         '<nav class="nav">' + navHtml + '</nav>' +
         '<div class="op-card"><div class="name">' + esc(state.operator.display_name) + '</div>' +
           '<span class="badge ' + (state.operator.verified?"b-turf":"b-coral") + '">' + (state.operator.verified?"Verified":"Pending review") + '</span>' +
+          (state.isSuperAdmin ? '<button id="switchOperatorBtn">Switch operator</button>' : "") +
           '<button id="logoutBtn">Log out</button></div>' +
       '</aside>' +
       '<main class="main" id="main"></main>' +
@@ -236,6 +237,13 @@ function renderShell(){
   );
   document.querySelectorAll(".nav-item").forEach(function(btn){ btn.onclick = function(){ state.tab = btn.dataset.tab; render(); }; });
   document.getElementById("logoutBtn").onclick = async function(){ await sb.auth.signOut(); location.reload(); };
+  var switchBtn = document.getElementById("switchOperatorBtn");
+  if(switchBtn) switchBtn.onclick = async function(){
+    var opsRes = await sb.from("operators").select("id,display_name,zone_display_name,status").order("display_name");
+    state.allOperators = opsRes.data || [];
+    state.screen = "chooseOperator";
+    render();
+  };
 }
 
 /* ---------- OVERVIEW ---------- */
@@ -288,12 +296,12 @@ function openNewZoneModal(){
     var name = document.getElementById("nzName").value.trim();
     if(!name) return;
     await sb.from("zones").insert({
-      operator_id: state.profile.operator_id, name: name,
+      operator_id: state.activeOperatorId, name: name,
       road_type: document.getElementById("nzRoadType").value,
       speed_limit_mph: Number(document.getElementById("nzSpeed").value),
       enabled_modes: ["on_demand"], active: true,
     });
-    closeModal(); await loadOperatorData(); render();
+    closeModal(); await loadOperatorData(state.activeOperatorId); render();
   };
 }
 
@@ -329,11 +337,11 @@ function openNewVTModal(){
     var label = document.getElementById("vtLabel").value.trim();
     if(!label) return;
     await sb.from("vehicle_types").insert({
-      operator_id: state.profile.operator_id, label: label,
+      operator_id: state.activeOperatorId, label: label,
       category: document.getElementById("vtCategory").value,
       capacity: Number(document.getElementById("vtCapacity").value),
     });
-    closeModal(); await loadOperatorData(); render();
+    closeModal(); await loadOperatorData(state.activeOperatorId); render();
   };
 }
 
@@ -478,7 +486,7 @@ function renderEventModal(){
     var i = seq.indexOf(d.step);
     if(i < seq.length-1){ d.step = seq[i+1]; renderEventModal(); return; }
     var evRes = await sb.from("events").insert({
-      operator_id: state.profile.operator_id, zone_id: d.zoneId, name: d.name,
+      operator_id: state.activeOperatorId, zone_id: d.zoneId, name: d.name,
       driver_access_mode: d.driverAccess, rider_access_mode: d.riderAccess,
       event_boundary: d.boundary && d.boundary.length>=3 ? { points: d.boundary } : null,
       vehicle_quota: {}, status: "scheduled",
@@ -487,7 +495,7 @@ function renderEventModal(){
       var rows = d.driverIds.map(function(id){ return { event_id: evRes.data.id, driver_id: id }; });
       await sb.from("event_drivers").insert(rows);
     }
-    closeModal(); await loadOperatorData(); render();
+    closeModal(); await loadOperatorData(state.activeOperatorId); render();
   };
 }
 
@@ -580,6 +588,19 @@ function render(){
     document.getElementById("deniedSignOut").onclick = async function(){ await sb.auth.signOut(); state.screen="auth"; render(); };
     return;
   }
+  if(state.screen==="chooseOperator"){
+    document.getElementById("root").innerHTML = screenChooseOperator();
+    document.querySelectorAll(".op-choice-btn").forEach(function(btn){
+      btn.onclick = async function(){
+        var o = state.allOperators[Number(btn.dataset.idx)];
+        state.activeOperatorId = o.id;
+        await loadOperatorData(state.activeOperatorId);
+        state.screen = "dashboard";
+        render();
+      };
+    });
+    return;
+  }
 
   renderShell();
   var map = { overview:renderOverview, zones:renderZones, fleet:renderFleet, events:renderEvents, drivers:renderDrivers, pricing:renderPricing, branding:renderBranding };
@@ -649,8 +670,8 @@ function bindTab(){
       inp.onchange = async function(e){
         var key = e.target.dataset.key;
         var updates = {}; updates[key] = Math.round(Number(e.target.value)*100);
-        await sb.from("operator_pricing").update(updates).eq("operator_id", state.profile.operator_id);
-        await loadOperatorData(); render();
+        await sb.from("operator_pricing").update(updates).eq("operator_id", state.activeOperatorId);
+        await loadOperatorData(state.activeOperatorId); render();
       };
     });
   }
@@ -659,8 +680,8 @@ function bindTab(){
       await sb.from("operators").update({
         zone_display_name: document.getElementById("brName").value,
         primary_color_hex: document.getElementById("brColor").value,
-      }).eq("id", state.profile.operator_id);
-      await loadOperatorData(); render();
+      }).eq("id", state.activeOperatorId);
+      await loadOperatorData(state.activeOperatorId); render();
     };
   }
 }
@@ -670,6 +691,15 @@ function bindTab(){
 async function bootstrapProfile(){
   var profRes = await sb.from("profiles").select("*").eq("id", state.session.user.id).single();
   state.profile = profRes.data;
+  state.isSuperAdmin = !!(state.profile && state.profile.role === "platform_admin");
+
+  if(state.isSuperAdmin){
+    var opsRes = await sb.from("operators").select("id,display_name,zone_display_name,status").order("display_name");
+    state.allOperators = opsRes.data || [];
+    state.screen = "chooseOperator";
+    render();
+    return;
+  }
 
   if(!state.profile || !state.profile.operator_id){
     state.screen = "denied";
@@ -677,9 +707,31 @@ async function bootstrapProfile(){
     return;
   }
 
-  await loadOperatorData();
+  state.activeOperatorId = state.profile.operator_id;
+  await loadOperatorData(state.activeOperatorId);
   state.screen = "dashboard";
   render();
+}
+
+function screenChooseOperator(){
+  var ops = state.allOperators;
+  return (
+    '<div class="authwrap"><div class="authbox" style="max-width:420px; text-align:left;">' +
+      '<p class="display" style="font-size:18px; font-weight:600; margin-bottom:4px;">Choose an operator</p>' +
+      '<p style="font-size:12px; color:var(--slate); margin-bottom:18px;">Platform admin access — pick which operator\'s dashboard to view.</p>' +
+      (ops.length===0 ?
+        '<p style="font-size:13px; color:var(--slate); padding:16px 0;">No operators exist yet.</p>'
+        :
+        '<div style="display:flex; flex-direction:column; gap:8px; max-height:340px; overflow-y:auto;">' +
+          ops.map(function(o, i){
+            return '<button class="op-choice-btn" data-idx="' + i + '" style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-radius:10px; border:1px solid var(--slate-100); background:#fff; width:100%; text-align:left;">' +
+              '<span style="font-size:14px; font-weight:600;">' + esc(o.display_name) + '</span>' +
+              '<span class="badge ' + (o.status==="active"?"b-turf":"b-coral") + '">' + esc(o.status||"—") + '</span></button>';
+          }).join("") +
+        '</div>'
+      ) +
+    '</div></div>'
+  );
 }
 
 var recoveryHandled = false;
