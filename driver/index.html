@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Karts2Me — Driver</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0E1A2B">
+<meta name="theme-color" content="#073876">
 <link rel="apple-touch-icon" href="/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -102,6 +102,53 @@ function urlBase64ToUint8Array(base64String){
   var outputArray = new Uint8Array(rawData.length);
   for (var i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
   return outputArray;
+}
+
+function pointInPolygon(point, polygon){
+  // Standard ray-casting algorithm. point = [lat, lng]; polygon = array of [lat, lng].
+  var x = point[1], y = point[0];
+  var inside = false;
+  for(var i=0, j=polygon.length-1; i<polygon.length; j=i++){
+    var xi = polygon[i][1], yi = polygon[i][0];
+    var xj = polygon[j][1], yj = polygon[j][0];
+    var intersect = ((yi>y) !== (yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi);
+    if(intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function getCurrentPosition(){
+  return new Promise(function(resolve, reject){
+    if(!("geolocation" in navigator)){ reject(new Error("Location services aren't available on this device.")); return; }
+    navigator.geolocation.getCurrentPosition(
+      function(pos){ resolve([pos.coords.latitude, pos.coords.longitude]); },
+      function(){ reject(new Error("Location permission is required to accept rides at this event.")); },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  });
+}
+
+async function checkEventEligibility(ride){
+  var ev = ride.events;
+  if(!ev) return { ok: true };
+
+  if(ev.driver_access_mode === "closed"){
+    var rosterRes = await sb.from("event_drivers").select("driver_id").eq("event_id", ride.event_id).eq("driver_id", state.session.user.id).maybeSingle();
+    if(!rosterRes.data){
+      return { ok: false, reason: "You're not on the official driver roster for this event." };
+    }
+  }
+
+  if(ev.event_boundary && ev.event_boundary.points && ev.event_boundary.points.length >= 3){
+    var pos;
+    try{ pos = await getCurrentPosition(); }
+    catch(e){ return { ok: false, reason: e.message }; }
+    if(!pointInPolygon(pos, ev.event_boundary.points)){
+      return { ok: false, reason: "You must be within the event's property line to accept this ride." };
+    }
+  }
+
+  return { ok: true };
 }
 
 async function enablePushNotifications(){
@@ -298,8 +345,15 @@ function screenHome(){
 
 function screenRides(){
   var rows = state.openRides.map(function(r){
+    var ev = r.events;
+    var badges = "";
+    if(ev){
+      if(ev.driver_access_mode === "closed") badges += '<span class="badge b-coral" style="margin-right:6px;">Roster only</span>';
+      if(ev.event_boundary && ev.event_boundary.points && ev.event_boundary.points.length>=3) badges += '<span class="badge b-slate">On-property only</span>';
+    }
     return (
       '<div class="card" style="padding:16px; margin-bottom:10px;">' +
+        (badges ? '<div style="margin-bottom:8px;">' + badges + '</div>' : "") +
         '<div style="display:flex; justify-content:space-between; align-items:flex-start;">' +
           '<div><p style="font-size:14px; font-weight:600;">To '+esc(r.dropoff_label||"—")+'</p>' +
           '<p style="font-size:12px; color:var(--slate); margin-top:2px;">'+r.seats_requested+' seat(s) &middot; '+(r.is_buyout?"Buyout":"Shared")+'</p></div>' +
@@ -366,7 +420,7 @@ async function loadApprovals(){
 }
 
 async function loadOpenRides(){
-  var res = await sb.from("rides").select("*").is("driver_id", null).eq("status", "requested").order("requested_at", { ascending:true });
+  var res = await sb.from("rides").select("*, events(driver_access_mode, event_boundary)").is("driver_id", null).eq("status", "requested").order("requested_at", { ascending:true });
   state.openRides = res.data || [];
 }
 
@@ -543,6 +597,16 @@ function bindRides(){
   document.getElementById("refreshRides").onclick = async function(){ await loadOpenRides(); render(); };
   document.querySelectorAll(".accept-btn").forEach(function(btn){
     btn.onclick = async function(){
+      var ride = state.openRides.find(function(r){ return r.id === btn.dataset.id; });
+      if(ride){
+        btn.disabled = true; btn.textContent = "Checking eligibility…";
+        var eligibility = await checkEventEligibility(ride);
+        if(!eligibility.ok){
+          alert(eligibility.reason);
+          btn.disabled = false; btn.textContent = "Accept ride";
+          return;
+        }
+      }
       var res = await sb.from("rides").update({ driver_id: state.session.user.id, status: "assigned" }).eq("id", btn.dataset.id).select().single();
       if(res.error){ alert("Could not accept — it may have just been claimed by another driver."); await loadOpenRides(); render(); return; }
       fetch(SUPABASE_URL + "/functions/v1/notify-ride-accepted", {

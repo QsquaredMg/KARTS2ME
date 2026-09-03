@@ -7,6 +7,10 @@
 <link rel="apple-touch-icon" href="/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.css">
+<script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.min.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root{
@@ -368,12 +372,20 @@ function renderEvents(){
 }
 
 function openNewEventModal(){
-  state.eventDraft = { step:1, name:"", zoneId: state.zones[0] ? state.zones[0].id : null, driverAccess:"open", riderAccess:"open" };
+  state.eventDraft = { step:1, name:"", zoneId: state.zones[0] ? state.zones[0].id : null, driverAccess:"open", riderAccess:"open", driverIds:[], boundary:null };
   renderEventModal();
 }
 
+function eventStepSequence(d){
+  // Roster step only applies to closed-fleet events; open events skip straight to boundary drawing.
+  return d.driverAccess === "closed" ? [1,2,3,4,5] : [1,2,4,5];
+}
+
+var eventBoundaryMap = null;
 function renderEventModal(){
   var d = state.eventDraft;
+  var seq = eventStepSequence(d);
+  var pos = seq.indexOf(d.step) + 1;
   var body = "";
   if(d.step===1){
     body = (
@@ -384,6 +396,35 @@ function renderEventModal(){
     );
   } else if(d.step===2){
     body = '<p style="font-size:14px; font-weight:600; margin-bottom:12px;">Access control</p>' + accessMatrixHtml(d.driverAccess, d.riderAccess);
+  } else if(d.step===3){
+    var drivers = state.approvedDrivers;
+    body = (
+      '<p style="font-size:14px; font-weight:600; margin-bottom:4px;">Official driver roster</p>' +
+      '<p style="font-size:12px; color:var(--slate); margin-bottom:12px;">Only these drivers can serve this closed-fleet event. Up to 10.</p>' +
+      '<p style="font-size:12px; font-weight:600; color:' + (d.driverIds.length>=10?"var(--coral)":"var(--slate)") + '; margin-bottom:10px;">' + d.driverIds.length + ' / 10 selected</p>' +
+      (drivers.length===0 ?
+        '<p style="font-size:13px; color:var(--slate); padding:16px 0;">No platform-approved drivers yet.</p>'
+        :
+        '<div style="display:flex; flex-direction:column; gap:6px; max-height:280px; overflow-y:auto;">' +
+          drivers.map(function(a){
+            var name = a.drivers && a.drivers.profiles ? a.drivers.profiles.full_name : "Unnamed driver";
+            var driverId = a.drivers ? a.drivers.id : null;
+            var checked = driverId && d.driverIds.indexOf(driverId) > -1;
+            return '<label style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; background:#F7F5F0;">' +
+              '<input type="checkbox" class="roster-check" data-driver="' + driverId + '" ' + (checked?"checked":"") + '>' +
+              '<span style="font-size:14px;">' + esc(name || "Unnamed") + '</span></label>';
+          }).join("") +
+        '</div>'
+      )
+    );
+  } else if(d.step===4){
+    body = (
+      '<p style="font-size:14px; font-weight:600; margin-bottom:4px;">Draw the property line</p>' +
+      '<p style="font-size:12px; color:var(--slate); margin-bottom:12px;">Riders and drivers are geofenced to this boundary. Use the polygon tool on the map to trace it.</p>' +
+      '<div id="boundaryMap" style="height:320px; border-radius:12px; overflow:hidden;"></div>' +
+      (d.boundary && d.boundary.length>=3 ? '<p style="font-size:12px; color:var(--turf); font-weight:600; margin-top:10px;">&#10003; Boundary drawn (' + d.boundary.length + ' points)</p>' : '<p style="font-size:12px; color:var(--coral); margin-top:10px;">No boundary drawn yet — optional, but recommended for closed-fleet events.</p>')
+    );
+    setTimeout(function(){ mountBoundaryMap(d); }, 0);
   } else {
     var zoneName = (state.zones.find(function(z){ return z.id===d.zoneId; })||{}).name || "";
     body = (
@@ -391,15 +432,17 @@ function renderEventModal(){
         '<p><span style="color:var(--slate);">Name:</span> ' + esc(d.name) + '</p>' +
         '<p><span style="color:var(--slate);">Zone:</span> ' + esc(zoneName) + '</p>' +
         '<p><span style="color:var(--slate);">Access:</span> ' + d.driverAccess + ' fleet / ' + d.riderAccess + ' riders</p>' +
+        (d.driverAccess==="closed" ? '<p><span style="color:var(--slate);">Roster:</span> ' + d.driverIds.length + ' official drivers</p>' : '') +
+        '<p><span style="color:var(--slate);">Boundary:</span> ' + (d.boundary && d.boundary.length>=3 ? d.boundary.length + '-point property line drawn' : 'Not drawn') + '</p>' +
       '</div>'
     );
   }
   openModal(
-    '<div class="modal-head"><h3 class="display">New event — step ' + d.step + ' of 3</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
+    '<div class="modal-head"><h3 class="display">New event — step ' + pos + ' of ' + seq.length + '</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
     '<div class="modal-body">' + body +
       '<div style="display:flex; justify-content:space-between; margin-top:24px;">' +
-        '<button class="btn btn-ghost" id="evBack">' + (d.step>1?"Back":"Cancel") + '</button>' +
-        '<button class="btn btn-primary" style="width:auto;" id="evNext">' + (d.step<3?"Continue":"Create event") + '</button>' +
+        '<button class="btn btn-ghost" id="evBack">' + (pos>1?"Back":"Cancel") + '</button>' +
+        '<button class="btn btn-primary" style="width:auto;" id="evNext">' + (pos<seq.length?"Continue":"Create event") + '</button>' +
       '</div>' +
     '</div>'
   , true);
@@ -413,16 +456,58 @@ function renderEventModal(){
       cell.onclick = function(){ d.driverAccess = cell.dataset.d; d.riderAccess = cell.dataset.r; renderEventModal(); };
     });
   }
-  document.getElementById("evBack").onclick = function(){ if(d.step>1){ d.step--; renderEventModal(); } else closeModal(); };
+  if(d.step===3){
+    document.querySelectorAll(".roster-check").forEach(function(cb){
+      cb.onchange = function(e){
+        var id = e.target.dataset.driver;
+        if(e.target.checked){
+          if(d.driverIds.length >= 10){ e.target.checked = false; return; }
+          d.driverIds.push(id);
+        } else {
+          d.driverIds = d.driverIds.filter(function(x){ return x !== id; });
+        }
+        renderEventModal();
+      };
+    });
+  }
+  document.getElementById("evBack").onclick = function(){
+    var i = seq.indexOf(d.step);
+    if(i>0){ d.step = seq[i-1]; renderEventModal(); } else closeModal();
+  };
   document.getElementById("evNext").onclick = async function(){
-    if(d.step<3){ d.step++; renderEventModal(); return; }
-    await sb.from("events").insert({
+    var i = seq.indexOf(d.step);
+    if(i < seq.length-1){ d.step = seq[i+1]; renderEventModal(); return; }
+    var evRes = await sb.from("events").insert({
       operator_id: state.profile.operator_id, zone_id: d.zoneId, name: d.name,
       driver_access_mode: d.driverAccess, rider_access_mode: d.riderAccess,
+      event_boundary: d.boundary && d.boundary.length>=3 ? { points: d.boundary } : null,
       vehicle_quota: {}, status: "scheduled",
-    });
+    }).select().single();
+    if(evRes.data && d.driverAccess==="closed" && d.driverIds.length>0){
+      var rows = d.driverIds.map(function(id){ return { event_id: evRes.data.id, driver_id: id }; });
+      await sb.from("event_drivers").insert(rows);
+    }
     closeModal(); await loadOperatorData(); render();
   };
+}
+
+function mountBoundaryMap(d){
+  if(eventBoundaryMap){ eventBoundaryMap.remove(); eventBoundaryMap = null; }
+  var zone = state.zones.find(function(z){ return z.id===d.zoneId; });
+  var center = [27.9504, -82.4573]; // reasonable default; operator can pan/zoom to their property
+  var m = L.map("boundaryMap").setView(center, 16);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(m);
+  if(d.boundary && d.boundary.length>=3){
+    L.polygon(d.boundary, { color: "#FA8411" }).addTo(m);
+  }
+  m.pm.addControls({ position:"topleft", drawMarker:false, drawCircleMarker:false, drawPolyline:false, drawRectangle:false, drawCircle:false, drawText:false, editMode:true, dragMode:false, cutPolygon:false, removalMode:true });
+  m.on("pm:create", function(e){
+    var latlngs = e.layer.getLatLngs()[0].map(function(p){ return [p.lat, p.lng]; });
+    d.boundary = latlngs;
+    renderEventModal();
+  });
+  eventBoundaryMap = m;
+  setTimeout(function(){ m.invalidateSize(); }, 50);
 }
 
 /* ---------- DRIVERS ---------- */
