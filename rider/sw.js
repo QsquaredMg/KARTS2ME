@@ -1,5 +1,6 @@
-const CACHE_NAME = "kart2me-v2";
-const PRECACHE = ["/", "/index.html", "/manifest.json"];
+const CACHE_NAME = "kart2me-v3";
+const OFFLINE_URL = "/offline.html";
+const PRECACHE = ["/", "/index.html", "/manifest.json", OFFLINE_URL, "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -20,6 +21,14 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
+
+  if (req.mode === "navigate") {
+    event.respondWith(
+      fetch(req).catch(() => caches.match(OFFLINE_URL))
+    );
+    return;
+  }
+
   event.respondWith(
     fetch(req)
       .then((res) => {
@@ -37,8 +46,8 @@ self.addEventListener("push", (event) => {
   const title = data.title || "Karts2Me";
   const options = {
     body: data.body || "",
-    icon: "/logo.png",
-    badge: "/logo.png",
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
     data: { url: data.url || "/" },
   };
   event.waitUntil(self.registration.showNotification(title, options));

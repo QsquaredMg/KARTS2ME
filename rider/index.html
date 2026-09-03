@@ -6,7 +6,7 @@
 <title>Karts2Me — Rider</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#073876">
-<link rel="apple-touch-icon" href="/logo.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -21,16 +21,18 @@
     --gold:#FA8411;
   }
   *{box-sizing:border-box;}
-  html,body{margin:0; background:#E7E9ED; font-family:'Inter',sans-serif; color:var(--text); -webkit-text-size-adjust:100%;}
+  html,body{margin:0; height:100%; background:#E7E9ED; font-family:'Inter',sans-serif; color:var(--text); -webkit-text-size-adjust:100%;}
   h1,h2,h3,p{margin:0;}
   button,select,input{font-family:inherit;}
   .display{font-family:'Inter',sans-serif; font-weight:700; color:var(--ink);}
   .mono{font-family:'Inter',sans-serif; font-variant-numeric:tabular-nums;}
 
-  body{display:flex; align-items:flex-start; justify-content:center; min-height:100vh; padding:24px 0;}
-  .phone{ width:390px; max-width:100vw; height:844px; max-height:92vh; background:var(--cream); overflow:hidden; position:relative; margin:0 auto; }
-  @media (min-width:440px){ .phone{ border-radius:44px; border:8px solid #0a0a0a; box-shadow:0 30px 60px -20px rgba(0,0,0,0.35); } }
-  .notch{ position:absolute; top:0; left:50%; transform:translateX(-50%); width:120px; height:26px; background:#0a0a0a; border-radius:0 0 16px 16px; z-index:50; }
+  body{ margin:0; min-height:100dvh; display:flex; align-items:stretch; justify-content:center; background:#E7E9ED; }
+  .phone{ width:100%; max-width:480px; min-height:100dvh; background:var(--cream); overflow:hidden; position:relative; }
+  @media (min-width:520px){
+    body{ padding:24px 0; align-items:flex-start; }
+    .phone{ min-height:calc(100dvh - 48px); border-radius:24px; box-shadow:0 20px 60px -20px rgba(14,26,43,0.25); }
+  }
   .app-logo-badge{ position:absolute; top:14px; left:16px; width:26px; height:26px; border-radius:8px; object-fit:cover; z-index:40; box-shadow:0 1px 4px rgba(0,0,0,0.25); }
   .screen{ position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch; }
 
@@ -58,7 +60,6 @@
 </head>
 <body>
 <div class="phone">
-  <div class="notch"></div>
   <img class="app-logo-badge" src="/logo.png" alt="Karts2Me logo">
   <div class="screen" id="screen"></div>
 </div>
@@ -368,6 +369,10 @@ function screenHome(){
         '<p style="font-size:13px; font-weight:600;">Get ride updates instantly</p>' +
         '<p style="font-size:12px; color:var(--slate); margin:2px 0 8px;">We will notify you when a driver accepts.</p>' +
         '<button id="enablePushBtn" class="btn-ghost" style="padding:8px;">Enable notifications</button></div></div>' : "") +
+      (deferredInstallPrompt && !isStandalone() ? '<div style="padding:0 20px; margin-top:12px;"><div class="card" style="padding:14px; background:var(--ink); box-shadow:none;">' +
+        '<p style="font-size:13px; font-weight:600; color:#fff;">Install Karts2Me</p>' +
+        '<p style="font-size:12px; color:rgba(255,255,255,0.7); margin:2px 0 8px;">Add it to your home screen for one-tap access.</p>' +
+        '<button id="installAppBtn" class="btn-ghost" style="padding:8px; background:rgba(255,255,255,0.12); color:#fff;">Install</button></div></div>' : "") +
       '<div style="padding:0 20px; margin-top:16px;">' +
         '<button id="goSearch" style="width:100%; display:flex; align-items:center; gap:10px; background:#fff; border-radius:16px; padding:14px 16px; box-shadow:0 1px 3px rgba(0,0,0,0.06); border:none; text-align:left;">' +
           '<span style="color:var(--slate);">Search</span><span style="font-size:14px; color:var(--slate);">Search a destination&hellip;</span></button>' +
@@ -789,6 +794,14 @@ function bind(){
     document.getElementById("changeLocationBtn").onclick = async function(){ await loadAvailableLocations(); go("chooseLocation"); };
     var pushBtn = document.getElementById("enablePushBtn");
     if(pushBtn) pushBtn.onclick = async function(){ var ok = await enablePushNotifications(); if(ok) render(); };
+    var installBtn = document.getElementById("installAppBtn");
+    if(installBtn) installBtn.onclick = async function(){
+      if(!deferredInstallPrompt) return;
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      render();
+    };
   }
   if(s==="search"){
     document.getElementById("backHome").onclick = function(){ go("home"); };
@@ -871,6 +884,20 @@ async function afterAuth(){
   } else {
     go("terms");
   }
+}
+
+var deferredInstallPrompt = null;
+window.addEventListener("beforeinstallprompt", function(e){
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  if(state.screen === "home") render();
+});
+window.addEventListener("appinstalled", function(){
+  deferredInstallPrompt = null;
+  if(state.screen === "home") render();
+});
+function isStandalone(){
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 }
 
 var recoveryHandled = false;
