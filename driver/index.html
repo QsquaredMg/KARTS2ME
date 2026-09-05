@@ -188,6 +188,7 @@ function screenAuth(){
       '<input id="authPassword" class="field" placeholder="Password" type="password">' +
       (state.authError ? '<div class="errbox">'+esc(state.authError)+'</div>' : "") +
       '<button id="authSubmit" class="btn-primary" style="margin-top:6px;">' + (isSignup?"Sign up":"Log in") + '</button>' +
+      (isSignup ? '<p style="font-size:11px; color:var(--slate); text-align:center; margin-top:10px; line-height:1.5;">By signing up, you agree to our <a href="/privacy.html" target="_blank" style="color:var(--slate); text-decoration:underline;">Privacy Policy</a></p>' : "") +
       (!isSignup ? '<button id="forgotPasswordLink" style="background:none; border:none; margin-top:12px; font-size:13px; color:var(--slate); text-decoration:underline; display:block; width:100%; text-align:center;">Forgot password?</button>' : "") +
       '<button id="authToggle" style="background:none; border:none; margin-top:14px; font-size:13px; color:var(--slate); text-decoration:underline;">' +
         (isSignup ? "Already driving? Log in" : "New driver? Create an account") + '</button>' +
@@ -626,17 +627,22 @@ function bindStatus(){
       return;
     }
     verifyBtn.disabled = true; verifyBtn.textContent = "Loading\u2026";
-    var apiRes = await fetch(SUPABASE_URL + "/functions/v1/create-identity-session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.session.access_token, "apikey": SUPABASE_ANON_KEY },
-    });
-    var data = await apiRes.json();
-    if(!apiRes.ok || !data.url){
-      alert("Couldn't start verification: " + (data.error || "unknown error"));
+    try{
+      var apiRes = await fetch(SUPABASE_URL + "/functions/v1/create-identity-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.session.access_token, "apikey": SUPABASE_ANON_KEY },
+      });
+      var data = await apiRes.json();
+      if(!apiRes.ok || !data.url){
+        alert("Couldn't start verification: " + (data.error || data.message || "unknown error"));
+        verifyBtn.disabled = false; verifyBtn.textContent = "Verify identity";
+        return;
+      }
+      window.location.href = data.url;
+    } catch(e){
+      alert("Couldn't reach the server. Check your connection and try again.");
       verifyBtn.disabled = false; verifyBtn.textContent = "Verify identity";
-      return;
     }
-    window.location.href = data.url;
   };
 }
 
@@ -667,18 +673,23 @@ function bindEarnings(){
   var setupBtn = document.getElementById("setupPayoutsBtn");
   if(setupBtn) setupBtn.onclick = async function(){
     setupBtn.disabled = true; setupBtn.textContent = "Loading…";
-    var res = await fetch(SUPABASE_URL + "/functions/v1/create-connect-account", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.session.access_token, "apikey": SUPABASE_ANON_KEY },
-      body: JSON.stringify({ role: "driver" }),
-    });
-    var data = await res.json();
-    if(!res.ok || !data.url){
-      alert("Couldn't start payout setup: " + (data.error || "unknown error"));
+    try{
+      var res = await fetch(SUPABASE_URL + "/functions/v1/create-connect-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.session.access_token, "apikey": SUPABASE_ANON_KEY },
+        body: JSON.stringify({ role: "driver" }),
+      });
+      var data = await res.json();
+      if(!res.ok || !data.url){
+        alert("Couldn't start payout setup: " + (data.error || data.message || "unknown error"));
+        setupBtn.disabled = false; setupBtn.textContent = "Set up payouts";
+        return;
+      }
+      window.location.href = data.url;
+    } catch(e){
+      alert("Couldn't reach the server. Check your connection and try again.");
       setupBtn.disabled = false; setupBtn.textContent = "Set up payouts";
-      return;
     }
-    window.location.href = data.url;
   };
 }
 

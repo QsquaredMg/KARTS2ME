@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Karts2Me — Privacy Policy</title>
+<meta name="theme-color" content="#073876">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  html,body{ margin:0; background:#E7E9ED; font-family:'Inter',-apple-system,sans-serif; color:#212431; }
+  .wrap{ max-width:720px; margin:0 auto; padding:48px 24px 80px; }
+  .header{ display:flex; align-items:center; gap:12px; margin-bottom:32px; }
+  .header img{ width:44px; height:44px; border-radius:12px; }
+  .header .brand{ font-weight:700; font-size:18px; color:#073876; }
+  .card{ background:#fff; border-radius:20px; padding:36px 32px; box-shadow:0 20px 60px -20px rgba(14,26,43,0.15); }
+  h1{ font-size:24px; color:#073876; margin:0 0 8px; }
+  h2{ font-size:17px; color:#073876; margin:32px 0 10px; }
+  p, li{ font-size:14px; line-height:1.7; color:#3A4150; }
+  a{ color:#FA8411; }
+  blockquote{ background:#FEE9D6; border-left:4px solid #FA8411; margin:16px 0; padding:14px 18px; border-radius:0 10px 10px 0; font-size:13px; color:#5A3D14; }
+  blockquote p{ color:#5A3D14; margin:0; }
+  table{ width:100%; border-collapse:collapse; font-size:13px; margin:12px 0; }
+  th, td{ text-align:left; padding:10px 12px; border-bottom:1px solid #E7E9ED; }
+  th{ color:#64748B; font-weight:600; text-transform:uppercase; font-size:11px; letter-spacing:0.03em; }
+  hr{ border:none; border-top:1px solid #E7E9ED; margin:32px 0; }
+  .back{ display:inline-block; margin-bottom:20px; font-size:13px; color:#64748B; text-decoration:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="javascript:history.back()">&larr; Back</a>
+  <div class="header">
+    <img src="/logo.png" alt="Karts2Me">
+    <span class="brand">Karts2Me</span>
+  </div>
+  <div class="card">
+<h1>Karts2Me Privacy Policy</h1>
+<p><strong>Last updated: [DATE]</strong></p>
+<blockquote>
+<p><strong>Note before publishing:</strong> This document was drafted to accurately describe what Karts2Me's software actually does with data, based on the real system architecture. It has <strong>not</strong> been reviewed by an attorney. Privacy law varies significantly by state and country (California's CCPA, Europe's GDPR, and others each impose specific requirements), and this draft should be reviewed by a lawyer familiar with your jurisdiction before it's published as your real policy.</p>
+</blockquote>
+<h2>1. Who we are</h2>
+<p>Karts2Me ("Karts2Me," "we," "us") operates a platform connecting riders with golf cart, shuttle, and vehicle drivers at participating properties and events. This policy explains what information we collect through our rider, driver, and operator apps, and how we use it.</p>
+<h2>2. Information we collect</h2>
+<h3>From riders</h3>
+<ul>
+<li><strong>Account information</strong>: name, email address, and password (stored in hashed form — we never see or store your plaintext password).</li>
+<li><strong>Location information</strong>: the property or event you select, addresses you search for as a pickup or destination, and the coordinates of your chosen destination.</li>
+<li><strong>Ride information</strong>: pickup and drop-off locations, fare amount, ride status, and ride history.</li>
+<li><strong>Payment information</strong>: processed entirely by our payment processor, Stripe. We do not store your card number. We retain only the fare amount, payment status, and a Stripe-issued transaction reference.</li>
+</ul>
+<h3>From drivers</h3>
+<ul>
+<li>Everything listed above for riders, plus:</li>
+<li><strong>Vehicle category applications</strong>: the type of vehicle you're applying to drive.</li>
+<li><strong>Identity verification</strong>: if you complete identity verification, this is handled entirely by Stripe Identity. Stripe collects your government-issued ID and a selfie directly — we never receive or store the document images themselves, only the verification result (verified / not verified).</li>
+<li><strong>Payout information</strong>: to receive payouts, you connect a bank account through Stripe Connect. Stripe holds your bank account details; we store only a reference ID and whether payouts are enabled.</li>
+<li><strong>Real-time location</strong>: when accepting a ride tied to a property with a defined boundary, your device's location is checked once, at the moment of acceptance, to confirm you're on the property. We do not continuously track driver location.</li>
+</ul>
+<h3>From operators</h3>
+<ul>
+<li>Business name, branding preferences (display name, color), zone and pricing configuration, and event details you create.</li>
+</ul>
+<h3>Automatically collected</h3>
+<ul>
+<li>Standard technical information collected by our hosting provider (Vercel) as part of normal web traffic, such as IP address and browser type.</li>
+<li>If you enable notifications, a push notification subscription token used to deliver ride updates to your device.</li>
+</ul>
+<h2>3. How we use this information</h2>
+<p>We use the information above to:
+- Create and manage your account
+- Match riders with available drivers and calculate routes and fares
+- Process payments and, for drivers and operators, payouts
+- Verify driver identity and vehicle category eligibility
+- Send ride-related notifications (by push notification or email)
+- Maintain the security of the platform and prevent fraud
+- Comply with legal and tax obligations</p>
+<p>We do not sell your personal information, and we do not use your data for third-party advertising. Karts2Me does not run ads.</p>
+<h2>4. Who we share information with</h2>
+<p>We share information only as necessary to operate the service:</p>
+<table>
+<thead>
+<tr>
+<th>Service provider</th>
+<th>What they receive</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stripe</td>
+<td>Payment details, identity documents (drivers only), bank account details (drivers/operators receiving payouts)</td>
+<td>Payment processing, identity verification, payouts</td>
+</tr>
+<tr>
+<td>Supabase</td>
+<td>Account and ride data</td>
+<td>Database and authentication hosting</td>
+</tr>
+<tr>
+<td>Vercel</td>
+<td>Standard web traffic data</td>
+<td>App hosting</td>
+</tr>
+<tr>
+<td>Resend</td>
+<td>Your email address</td>
+<td>Delivering account emails (password resets, etc.)</td>
+</tr>
+<tr>
+<td>OpenStreetMap (Nominatim)</td>
+<td>Text of address searches you type</td>
+<td>Converting addresses into map coordinates</td>
+</tr>
+</tbody>
+</table>
+<p>Drivers and riders involved in the same ride can see limited information about each other (such as a name and vehicle description) necessary to complete the ride, similar to other rideshare platforms.</p>
+<p>We may also disclose information if required by law, subpoena, or to protect the safety of our users.</p>
+<h2>5. Data retention</h2>
+<p>We retain account and ride information for as long as your account is active, and for a reasonable period afterward as needed for legal, tax, and dispute-resolution purposes. You can request deletion of your account at any time (see Section 7).</p>
+<h2>6. Security</h2>
+<p>We use industry-standard measures to protect your information, including encrypted connections (HTTPS) for all data in transit, hashed password storage, and database access controls that restrict each user to their own data. No system is perfectly secure, and we cannot guarantee absolute security.</p>
+<h2>7. Your rights and choices</h2>
+<p>You can:
+- <strong>Access or correct</strong> your account information at any time by editing your profile.
+- <strong>Request deletion</strong> of your account and associated personal data by contacting us at [CONTACT EMAIL]. Some information may be retained where required by law (for example, financial records for tax purposes).
+- <strong>Opt out of push notifications</strong> at any time through your device or browser settings.</p>
+<p>If you are a California resident, you may have additional rights under the CCPA. If you are located in the European Economic Area, you may have additional rights under the GDPR. Contact us to exercise these rights.</p>
+<h2>8. Children's privacy</h2>
+<p>Karts2Me is not directed to, and should not be used by, anyone under the age of 18. We do not knowingly collect information from children.</p>
+<h2>9. Changes to this policy</h2>
+<p>We may update this policy from time to time. We'll update the "Last updated" date above when we do. Material changes will be communicated through the app or by email.</p>
+<h2>10. Contact us</h2>
+<p>Questions about this policy or your data can be sent to: <strong>[CONTACT EMAIL]</strong></p>
+<hr />
+<p><em>This policy describes Karts2Me's software and data practices as implemented. It is a draft prepared for legal review and has not yet been finalized by an attorney.</em></p>
+  </div>
+</div>
+</body>
+</html>

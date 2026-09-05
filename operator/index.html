@@ -144,6 +144,7 @@ function screenAuth(){
       '<input id="authPassword" class="field" placeholder="Password" type="password">' +
       (state.authError ? '<div class="errbox">' + esc(state.authError) + '</div>' : "") +
       '<button id="authSubmit" class="btn btn-primary">' + (isSignup?"Sign up":"Log in") + '</button>' +
+      (isSignup ? '<p style="font-size:11px; color:var(--slate); text-align:center; margin-top:10px; line-height:1.5;">By signing up, you agree to our <a href="/privacy.html" target="_blank" style="color:var(--slate); text-decoration:underline;">Privacy Policy</a></p>' : "") +
       (!isSignup ? '<button id="forgotPasswordLink" style="background:none; border:none; margin-top:12px; font-size:12px; color:var(--slate); text-decoration:underline; display:block; width:100%; text-align:center;">Forgot password?</button>' : "") +
       '<button id="authToggle" style="background:none; border:none; margin-top:12px; font-size:12px; color:var(--slate); text-decoration:underline; display:block; width:100%; text-align:center;">' +
         (isSignup ? "Already have an account? Log in" : "New operator? Create account") + '</button>' +
@@ -798,18 +799,23 @@ function bindTab(){
     document.getElementById("setupOperatorPayoutsBtn").onclick = async function(){
       var btn = document.getElementById("setupOperatorPayoutsBtn");
       btn.disabled = true; btn.textContent = "Loading…";
-      var res = await fetch(SUPABASE_URL + "/functions/v1/create-connect-account", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.session.access_token, "apikey": SUPABASE_ANON_KEY },
-        body: JSON.stringify({ role: "operator" }),
-      });
-      var data = await res.json();
-      if(!res.ok || !data.url){
-        alert("Couldn't start payout setup: " + (data.error || "unknown error"));
+      try{
+        var res = await fetch(SUPABASE_URL + "/functions/v1/create-connect-account", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.session.access_token, "apikey": SUPABASE_ANON_KEY },
+          body: JSON.stringify({ role: "operator" }),
+        });
+        var data = await res.json();
+        if(!res.ok || !data.url){
+          alert("Couldn't start payout setup: " + (data.error || data.message || "unknown error"));
+          btn.disabled = false; btn.textContent = "Set up payouts";
+          return;
+        }
+        window.location.href = data.url;
+      } catch(e){
+        alert("Couldn't reach the server. Check your connection and try again.");
         btn.disabled = false; btn.textContent = "Set up payouts";
-        return;
       }
-      window.location.href = data.url;
     };
   }
   if(state.tab==="branding"){
