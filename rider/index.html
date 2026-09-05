@@ -150,13 +150,13 @@ async function enablePushNotifications(){
 
 async function loadAvailableLocations(){
   var zonesRes = await sb.from("zones").select("id,operator_id,name,active,operators(display_name,zone_display_name)").eq("active", true);
-  var eventsRes = await sb.from("events").select("id,operator_id,zone_id,name,rider_access_mode,ends_at,operators(display_name)").eq("rider_access_mode", "open");
+  var eventsRes = await sb.from("events").select("id,operator_id,zone_id,name,rider_access_mode,status,ends_at,operators(display_name)").eq("rider_access_mode", "open");
   var zones = (zonesRes.data || []).map(function(z){
     return { kind:"zone", id:z.id, operatorId:z.operator_id, name:z.name, operatorName: z.operators ? (z.operators.zone_display_name || z.operators.display_name) : "Karts2Me" };
   });
   var now = new Date();
   var events = (eventsRes.data || []).filter(function(e){
-    return !e.ends_at || new Date(e.ends_at) > now;
+    return e.status !== "cancelled" && e.status !== "completed" && (!e.ends_at || new Date(e.ends_at) > now);
   }).map(function(e){
     return { kind:"event", id:e.zone_id, eventId:e.id, operatorId:e.operator_id, name:e.name, operatorName: e.operators ? e.operators.display_name : "Karts2Me" };
   });
