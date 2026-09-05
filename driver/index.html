@@ -287,6 +287,21 @@ function screenApply(){
 
 function screenStatus(){
   var hasApproved = state.approvals.some(function(a){ return a.status==="approved"; });
+  var d = state.driver;
+  var idBadge, idButtonLabel, idDisabled;
+  if(d.identity_verified){
+    idBadge = '<span class="badge b-turf">Verified</span>';
+    idButtonLabel = null;
+  } else if(d.identity_verification_status === "processing"){
+    idBadge = '<span class="badge b-gold">Processing</span>';
+    idButtonLabel = "Check status";
+  } else if(d.identity_verification_status === "requires_input"){
+    idBadge = '<span class="badge b-coral">Action needed</span>';
+    idButtonLabel = "Continue verification";
+  } else {
+    idBadge = '<span class="badge b-slate">Not started</span>';
+    idButtonLabel = "Verify identity";
+  }
   var rows = state.approvals.map(function(a){
     var tone = a.status==="approved" ? "b-turf" : a.status==="rejected" ? "b-coral" : "b-gold";
     return (
@@ -299,6 +314,13 @@ function screenStatus(){
   return (
     '<div class="topbar"><div style="width:36px;"></div><p class="display" style="font-weight:600; font-size:15px;">Your applications</p><div style="width:36px;"></div></div>' +
     '<div style="padding:0 20px;">' +
+      '<div class="card" style="padding:16px; margin-bottom:14px;">' +
+        '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">' +
+          '<p style="font-size:14px; font-weight:600;">Identity verification</p>' + idBadge +
+        '</div>' +
+        '<p style="font-size:12px; color:var(--slate); margin-bottom:' + (idButtonLabel ? '10px' : '0') + ';">Confirms your government ID matches a live selfie.</p>' +
+        (idButtonLabel ? '<button id="verifyIdentityBtn" class="btn-ghost" style="padding:10px;">' + idButtonLabel + '</button>' : "") +
+      '</div>' +
       (rows || '<p style="font-size:13px; color:var(--slate); text-align:center; padding:20px;">No applications yet.</p>') +
       '<button id="applyMore" class="btn-ghost" style="margin-top:8px;">+ Apply for another category</button>' +
     '</div>' +
@@ -593,6 +615,28 @@ function bindStatus(){
     state.tab = "home"; state.screen = "app";
     await loadEarnings(); await checkActiveRide();
     render();
+  };
+  var verifyBtn = document.getElementById("verifyIdentityBtn");
+  if(verifyBtn) verifyBtn.onclick = async function(){
+    if(state.driver.identity_verification_status === "processing"){
+      // Just re-check our own record \u2014 the webhook updates it once Stripe finishes.
+      var res = await sb.from("drivers").select("*").eq("id", state.session.user.id).single();
+      if(res.data) state.driver = res.data;
+      render();
+      return;
+    }
+    verifyBtn.disabled = true; verifyBtn.textContent = "Loading\u2026";
+    var apiRes = await fetch(SUPABASE_URL + "/functions/v1/create-identity-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.session.access_token, "apikey": SUPABASE_ANON_KEY },
+    });
+    var data = await apiRes.json();
+    if(!apiRes.ok || !data.url){
+      alert("Couldn't start verification: " + (data.error || "unknown error"));
+      verifyBtn.disabled = false; verifyBtn.textContent = "Verify identity";
+      return;
+    }
+    window.location.href = data.url;
   };
 }
 

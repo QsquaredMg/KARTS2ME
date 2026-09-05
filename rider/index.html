@@ -97,6 +97,8 @@ var state = {
   pricing: null,
   dest: null,
   destCoords: null,
+  routeEtaMinutes: null,
+  routeDistanceMiles: null,
   addressQuery: "",
   addressResults: [],
   addressSearching: false,
@@ -161,6 +163,27 @@ async function loadAvailableLocations(){
     return { kind:"event", id:e.zone_id, eventId:e.id, operatorId:e.operator_id, name:e.name, operatorName: e.operators ? e.operators.display_name : "Karts2Me" };
   });
   state.availableLocations = events.concat(zones);
+}
+
+async function fetchRoute(from, to){
+  // Public OSRM demo server — fine for this stage, but rate-limited and not
+  // meant for heavy production traffic. Self-hosting OSRM is the upgrade
+  // path once volume justifies it.
+  try{
+    var url = "https://router.project-osrm.org/route/v1/driving/" + from[1] + "," + from[0] + ";" + to[1] + "," + to[0] + "?overview=false";
+    var res = await fetch(url);
+    var data = await res.json();
+    if(data.code === "Ok" && data.routes && data.routes[0]){
+      state.routeEtaMinutes = Math.max(1, Math.round(data.routes[0].duration / 60));
+      state.routeDistanceMiles = (data.routes[0].distance / 1609.34).toFixed(1);
+    } else {
+      state.routeEtaMinutes = null;
+      state.routeDistanceMiles = null;
+    }
+  } catch(e){
+    state.routeEtaMinutes = null;
+    state.routeDistanceMiles = null;
+  }
 }
 
 async function loadZoneData(){
@@ -450,7 +473,7 @@ function screenSearch(){
 function screenMode(){
   var t = fareTotal();
   var opts = [
-    { key:"on_demand", icon:"&#128663;", label:"On-Demand Cart", eta:"4 min", price:"$" + t.toFixed(2) },
+    { key:"on_demand", icon:"&#128663;", label:"On-Demand Cart", eta:(state.routeEtaMinutes ? state.routeEtaMinutes + " min" : "4 min"), price:"$" + t.toFixed(2) },
     { key:"fixed_route", icon:"&#128652;", label:"Fixed Route (next)", eta:"2 min", price:"Free", free:true },
     { key:"reserved", icon:"&#128197;", label:"Reserve for later", eta:null, price:"&rarr;" },
   ];
@@ -485,7 +508,7 @@ function screenConfirm(){
     '<div class="topbar"><button class="backbtn" id="backMode">&lsaquo;</button><p class="display" style="font-weight:600; font-size:15px;">Confirm ride</p><div style="width:36px;"></div></div>' +
     '<div style="padding:0 20px;">' +
       '<div class="card" style="padding:16px; display:flex; align-items:center; gap:10px; margin-bottom:16px;">' +
-        '<span style="font-size:24px;">&#128663;</span><div><p style="font-size:14px; font-weight:600;">4-Seat Golf Cart</p><p style="font-size:12px; color:var(--slate);">To ' + esc(state.dest) + ' &middot; ~4 min</p></div></div>' +
+        '<span style="font-size:24px;">&#128663;</span><div><p style="font-size:14px; font-weight:600;">4-Seat Golf Cart</p><p style="font-size:12px; color:var(--slate);">To ' + esc(state.dest) + ' &middot; ~' + (state.routeEtaMinutes || 4) + ' min' + (state.routeDistanceMiles ? ' (' + state.routeDistanceMiles + ' mi)' : '') + '</p></div></div>' +
       '<p style="font-size:11px; font-family:\'IBM Plex Mono\',monospace; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate); margin-bottom:8px;">Seats needed</p>' +
       '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">' +
         Array.from({length:CAPACITY}).map(function(_, i){
@@ -648,7 +671,7 @@ function screenActive(){
   return (
     '<div style="height:100%; display:flex; flex-direction:column;">' +
       '<div style="flex:1; position:relative;"><div id="activeMap" style="width:100%; height:100%;"></div>' +
-        '<div style="position:absolute; top:48px; left:20px;"><span class="badge b-gold">ETA ' + state.eta + ' min</span></div></div>' +
+        '<div style="position:absolute; top:48px; left:20px;"><span class="badge b-gold">ETA ' + (state.routeEtaMinutes || state.eta) + ' min</span></div></div>' +
       '<div style="background:#fff; border-radius:24px 24px 0 0; margin-top:-24px; position:relative; z-index:1; padding:20px;">' +
         '<div style="display:flex; align-items:center; gap:10px; margin-bottom:18px;">' +
           '<div style="width:48px; height:48px; border-radius:99px; background:var(--ink); color:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700;">' + DRIVER.photo + '</div>' +
@@ -810,19 +833,21 @@ function bind(){
       searchAddress(state.addressQuery);
     };
     document.querySelectorAll(".addr-btn").forEach(function(btn){
-      btn.onclick = function(){
+      btn.onclick = async function(){
         var r = state.addressResults[Number(btn.dataset.idx)];
         state.dest = r.display_name.split(",")[0]; // short label for display
         state.destCoords = [parseFloat(r.lat), parseFloat(r.lon)];
         state.addressResults = [];
         state.addressQuery = "";
+        if(state.zoneCenter) await fetchRoute(state.zoneCenter, state.destCoords);
         go("mode");
       };
     });
     document.querySelectorAll(".poi-btn").forEach(function(btn){
-      btn.onclick = function(){
+      btn.onclick = async function(){
         state.dest = btn.dataset.poi;
         state.destCoords = [parseFloat(btn.dataset.lat), parseFloat(btn.dataset.lng)];
+        if(state.zoneCenter) await fetchRoute(state.zoneCenter, state.destCoords);
         go("mode");
       };
     });
@@ -868,7 +893,7 @@ function bind(){
     } else {
       document.querySelectorAll(".tip-btn").forEach(function(btn){ btn.onclick = function(){ state.tip = Number(btn.dataset.n); render(); }; });
       document.getElementById("finishRide").onclick = function(){
-        state.screen="home"; state.dest=null; state.destCoords=null; state.seats=1; state.buyout=false; state.rating=0; state.showTip=false; state.tip=null; state.currentRideId=null;
+        state.screen="home"; state.dest=null; state.destCoords=null; state.routeEtaMinutes=null; state.routeDistanceMiles=null; state.seats=1; state.buyout=false; state.rating=0; state.showTip=false; state.tip=null; state.currentRideId=null;
         state.people = [ { name:"You", status:"paid_confirmed" }, { name:"Maria", status:"paid_confirmed" }, { name:"Jake", status:"paid_unconfirmed" } ];
         render();
       };

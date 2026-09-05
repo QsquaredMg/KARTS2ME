@@ -167,7 +167,7 @@ async function loadAdminData(){
   var opRes = await sb.from("operators").select("*").order("created_at", { ascending:false });
   state.operators = opRes.data || [];
 
-  var qRes = await sb.from("category_approvals").select("*, drivers(id, profiles(full_name))").eq("status", "pending");
+  var qRes = await sb.from("category_approvals").select("*, drivers(id, identity_verified, profiles(full_name))").eq("status", "pending");
   state.queue = qRes.data || [];
 
   var reqRes = await sb.from("vehicle_category_requirements").select("*");
@@ -267,10 +267,12 @@ function renderApprovals(){
   }
   var rows = state.queue.map(function(q){
     var name = q.drivers && q.drivers.profiles ? q.drivers.profiles.full_name : "Unnamed driver";
+    var idVerified = q.drivers && q.drivers.identity_verified;
     return (
       '<div class="panel approval-row"><div style="display:flex; align-items:center; gap:14px;">' +
         '<div class="avatar">' + (name||"?").split(" ").map(function(n){return n[0];}).join("").slice(0,2) + '</div>' +
-        '<div><p style="font-weight:600; color:#fff;">' + esc(name) + '</p><p style="font-size:12px; color:var(--slate);">Applying for <span class="mono">' + q.category + '</span></p></div></div>' +
+        '<div><p style="font-weight:600; color:#fff;">' + esc(name) + '</p><p style="font-size:12px; color:var(--slate);">Applying for <span class="mono">' + q.category + '</span></p>' +
+        '<span class="badge ' + (idVerified?"b-turf":"b-coral") + '" style="margin-top:6px;">' + (idVerified?"ID verified":"ID not verified") + '</span></div></div>' +
         '<div style="display:flex; gap:8px;"><button class="btn btn-danger reject-btn" data-id="' + q.id + '" style="padding:8px 14px; font-size:12px;">Reject</button>' +
         '<button class="btn btn-primary approve-btn" data-id="' + q.id + '" style="width:auto; padding:8px 14px; font-size:12px;">Approve</button></div></div>'
     );
