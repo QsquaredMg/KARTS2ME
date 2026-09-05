@@ -402,6 +402,10 @@ function screenActive(){
 /* ---------- EARNINGS ---------- */
 
 function screenEarnings(){
+  var d = state.driver;
+  var payoutStatusBadge = d.payout_enabled
+    ? '<span class="badge b-turf">Active</span>'
+    : (d.payout_account_id ? '<span class="badge b-gold">Setup incomplete</span>' : '<span class="badge b-coral">Not set up</span>');
   return (
     '<div class="topbar"><p class="display" style="font-weight:600; font-size:18px;">Earnings</p><div style="width:36px;"></div></div>' +
     '<div style="padding:0 20px;">' +
@@ -410,7 +414,16 @@ function screenEarnings(){
         '<p class="display" style="font-size:32px; font-weight:600; color:#fff; margin-top:6px;">$'+(state.earningsTotal/100).toFixed(2)+'</p>' +
         '<p style="font-size:12px; color:rgba(255,255,255,0.6); margin-top:4px;">'+state.earningsCount+' completed rides</p>' +
       '</div>' +
-      '<div style="font-size:12px; color:var(--slate); padding:0 4px; line-height:1.5;">Shown as gross fare per ride. Platform fee deduction and payout scheduling are handled operator-side and not yet itemized here.</div>' +
+      '<div class="card" style="padding:20px; margin-bottom:16px;">' +
+        '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">' +
+          '<p style="font-size:14px; font-weight:600;">Payout account</p>' + payoutStatusBadge +
+        '</div>' +
+        '<p style="font-size:12px; color:var(--slate); margin-bottom:12px;">' +
+          (d.payout_enabled ? "You're set up to receive payouts automatically after each completed ride." : "Finish setup to receive payouts directly to your bank account.") +
+        '</p>' +
+        '<button id="setupPayoutsBtn" class="btn-primary" style="padding:10px;">' + (d.payout_account_id ? "Finish setup" : "Set up payouts") + '</button>' +
+      '</div>' +
+      '<div style="font-size:12px; color:var(--slate); padding:0 4px; line-height:1.5;">Shown as gross fare per ride. Your share (after the platform fee) is transferred to your payout account automatically once each ride completes.</div>' +
     '</div>'
   );
 }
@@ -486,7 +499,7 @@ function render(){
   } else if(state.tab==="rides"){
     screenEl.innerHTML = screenRides(); bindRides();
   } else if(state.tab==="earnings"){
-    screenEl.innerHTML = screenEarnings();
+    screenEl.innerHTML = screenEarnings(); bindEarnings();
   }
   renderBottomNav();
 }
@@ -606,6 +619,25 @@ function bindHome(){
   };
 }
 
+function bindEarnings(){
+  var setupBtn = document.getElementById("setupPayoutsBtn");
+  if(setupBtn) setupBtn.onclick = async function(){
+    setupBtn.disabled = true; setupBtn.textContent = "Loading…";
+    var res = await fetch(SUPABASE_URL + "/functions/v1/create-connect-account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.session.access_token, "apikey": SUPABASE_ANON_KEY },
+      body: JSON.stringify({ role: "driver" }),
+    });
+    var data = await res.json();
+    if(!res.ok || !data.url){
+      alert("Couldn't start payout setup: " + (data.error || "unknown error"));
+      setupBtn.disabled = false; setupBtn.textContent = "Set up payouts";
+      return;
+    }
+    window.location.href = data.url;
+  };
+}
+
 function bindRides(){
   document.getElementById("refreshRides").onclick = async function(){ await loadOpenRides(); render(); };
   document.querySelectorAll(".accept-btn").forEach(function(btn){
@@ -641,7 +673,16 @@ function bindActive(){
   };
   var completeBtn = document.getElementById("completeRideBtn");
   if(completeBtn) completeBtn.onclick = async function(){
-    await sb.from("rides").update({ status:"completed", completed_at:new Date().toISOString() }).eq("id", state.activeRide.id);
+    var completedRideId = state.activeRide.id;
+    await sb.from("rides").update({ status:"completed", completed_at:new Date().toISOString() }).eq("id", completedRideId);
+    // Best-effort: trigger the payout transfer now that the ride is done. If the
+    // driver hasn't finished payout setup yet, this simply fails quietly — the
+    // ride itself still completes fine either way.
+    fetch(SUPABASE_URL + "/functions/v1/transfer-ride-earnings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.session.access_token, "apikey": SUPABASE_ANON_KEY },
+      body: JSON.stringify({ ride_id: completedRideId }),
+    }).catch(function(){});
     state.activeRide = null;
     await loadEarnings();
     render();

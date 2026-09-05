@@ -218,7 +218,7 @@ function sectionHead(title, desc, actionHtml){
   return '<div class="section-head"><div><h2 class="display">' + title + '</h2><p>' + desc + '</p></div>' + (actionHtml||"") + '</div>';
 }
 
-var NAV = [["overview","Overview"],["zones","Zones"],["fleet","Fleet"],["events","Events"],["drivers","Drivers"],["pricing","Pricing"],["branding","Branding"]];
+var NAV = [["overview","Overview"],["zones","Zones"],["fleet","Fleet"],["events","Events"],["drivers","Drivers"],["pricing","Pricing"],["payouts","Payouts"],["branding","Branding"]];
 
 function renderShell(){
   var navHtml = NAV.map(function(pair){
@@ -610,6 +610,25 @@ function renderPricing(){
 
 /* ---------- BRANDING ---------- */
 
+function renderPayouts(){
+  var o = state.operator;
+  var statusBadge = o.payout_enabled
+    ? '<span class="badge b-turf">Active</span>'
+    : (o.payout_account_id ? '<span class="badge b-gold">Setup incomplete</span>' : '<span class="badge b-coral">Not set up</span>');
+  return (
+    sectionHead("Payouts", "For drivers you employ directly \u2014 their share of each fare is transferred here, not to them individually.") +
+    '<div class="card" style="padding:20px; max-width:440px;">' +
+      '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">' +
+        '<p style="font-size:14px; font-weight:600;">Payout account</p>' + statusBadge +
+      '</div>' +
+      '<p style="font-size:12px; color:var(--slate); margin-bottom:14px;">' +
+        (o.payout_enabled ? "Set up and receiving transfers for your employed drivers\u2019 completed rides." : "Connect a bank account to receive earnings for drivers employed directly by you. Gig drivers set up their own payout accounts individually and are not affected by this.") +
+      '</p>' +
+      '<button id="setupOperatorPayoutsBtn" class="btn btn-primary" style="width:auto;">' + (o.payout_account_id ? "Finish setup" : "Set up payouts") + '</button>' +
+    '</div>'
+  );
+}
+
 function renderBranding(){
   var b = state.operator;
   return (
@@ -676,7 +695,7 @@ function render(){
   }
 
   renderShell();
-  var map = { overview:renderOverview, zones:renderZones, fleet:renderFleet, events:renderEvents, drivers:renderDrivers, pricing:renderPricing, branding:renderBranding };
+  var map = { overview:renderOverview, zones:renderZones, fleet:renderFleet, events:renderEvents, drivers:renderDrivers, pricing:renderPricing, payouts:renderPayouts, branding:renderBranding };
   document.getElementById("main").innerHTML = map[state.tab]();
   bindTab();
 }
@@ -774,6 +793,24 @@ function bindTab(){
         await loadOperatorData(state.activeOperatorId); render();
       };
     });
+  }
+  if(state.tab==="payouts"){
+    document.getElementById("setupOperatorPayoutsBtn").onclick = async function(){
+      var btn = document.getElementById("setupOperatorPayoutsBtn");
+      btn.disabled = true; btn.textContent = "Loading…";
+      var res = await fetch(SUPABASE_URL + "/functions/v1/create-connect-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.session.access_token, "apikey": SUPABASE_ANON_KEY },
+        body: JSON.stringify({ role: "operator" }),
+      });
+      var data = await res.json();
+      if(!res.ok || !data.url){
+        alert("Couldn't start payout setup: " + (data.error || "unknown error"));
+        btn.disabled = false; btn.textContent = "Set up payouts";
+        return;
+      }
+      window.location.href = data.url;
+    };
   }
   if(state.tab==="branding"){
     document.getElementById("brSave").onclick = async function(){
