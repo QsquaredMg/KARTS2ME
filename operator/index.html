@@ -201,7 +201,7 @@ async function loadOperatorData(opId){
   var evRes = await sb.from("events").select("*").eq("operator_id", opId).order("created_at", { ascending:false });
   state.events = evRes.data || [];
 
-  var drRes = await sb.from("category_approvals").select("*, drivers(id, employment_type, profiles(full_name))").eq("status", "approved");
+  var drRes = await sb.from("category_approvals").select("*, drivers(id, employment_type, employing_operator_id, profiles(full_name))").eq("status", "approved");
   state.approvedDrivers = drRes.data || [];
 
   var prRes = await sb.from("operator_pricing").select("*").eq("operator_id", opId).maybeSingle();
@@ -282,7 +282,8 @@ function renderZones(){
       '<td class="mono">' + (z.speed_limit_mph||"—") + ' mph</td>' +
       '<td><div class="chip-row">' + (z.enabled_modes||[]).map(function(m){ return '<span class="badge b-slate">' + m.replace("_"," ") + '</span>'; }).join("") + '</div></td>' +
       '<td><span class="badge ' + (z.active?"b-turf":"b-slate") + '">' + (z.active?"Active":"Inactive") + '</span></td>' +
-      '<td><button class="zone-delete-btn" data-id="' + z.id + '" data-name="' + esc(z.name) + '" style="background:none; border:none; color:var(--coral); font-size:12px; font-weight:600; cursor:pointer;">Delete</button></td></tr>'
+      '<td style="white-space:nowrap;"><button class="zone-edit-btn" data-idx="' + state.zones.indexOf(z) + '" style="background:none; border:none; color:var(--ink); font-size:12px; font-weight:600; cursor:pointer; margin-right:12px;">Edit</button>' +
+      '<button class="zone-delete-btn" data-id="' + z.id + '" data-name="' + esc(z.name) + '" style="background:none; border:none; color:var(--coral); font-size:12px; font-weight:600; cursor:pointer;">Delete</button></td></tr>'
     );
   }).join("");
   return (
@@ -292,14 +293,18 @@ function renderZones(){
   );
 }
 
-function openNewZoneModal(){
+function openZoneModal(existing){
+  var isEdit = !!existing;
   openModal(
-    '<div class="modal-head"><h3 class="display">New zone</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
+    '<div class="modal-head"><h3 class="display">' + (isEdit?"Edit zone":"New zone") + '</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
     '<div class="modal-body">' +
-      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Zone name</span><input class="field" id="nzName" placeholder="e.g. Poolside Loop"></label>' +
-      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Road type</span><select class="field" id="nzRoadType"><option value="cart_path">Cart path</option><option value="shared_road">Shared road</option><option value="mixed">Mixed</option></select></label>' +
-      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Speed limit (mph)</span><input type="number" class="field" id="nzSpeed" value="15"></label>' +
-      '<div style="display:flex; justify-content:flex-end; gap:10px;"><button class="btn btn-ghost" id="nzCancel">Cancel</button><button class="btn btn-primary" style="width:auto;" id="nzCreate">Create zone</button></div>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Zone name</span><input class="field" id="nzName" placeholder="e.g. Poolside Loop" value="' + (isEdit?esc(existing.name):"") + '"></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Road type</span><select class="field" id="nzRoadType">' +
+        ["cart_path","shared_road","mixed"].map(function(rt){ return '<option value="'+rt+'" '+(isEdit && existing.road_type===rt?"selected":"")+'>'+ (rt==="cart_path"?"Cart path":rt==="shared_road"?"Shared road":"Mixed") +'</option>'; }).join("") +
+      '</select></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Speed limit (mph)</span><input type="number" class="field" id="nzSpeed" value="' + (isEdit?existing.speed_limit_mph:15) + '"></label>' +
+      (isEdit ? '<label style="display:flex; align-items:center; gap:8px; margin-bottom:14px;"><input type="checkbox" id="nzActive" ' + (existing.active?"checked":"") + '><span style="font-size:14px;">Active</span></label>' : "") +
+      '<div style="display:flex; justify-content:flex-end; gap:10px;"><button class="btn btn-ghost" id="nzCancel">Cancel</button><button class="btn btn-primary" style="width:auto;" id="nzCreate">' + (isEdit?"Save changes":"Create zone") + '</button></div>' +
     '</div>'
   );
   document.getElementById("modalCloseBtn").onclick = closeModal;
@@ -307,12 +312,20 @@ function openNewZoneModal(){
   document.getElementById("nzCreate").onclick = async function(){
     var name = document.getElementById("nzName").value.trim();
     if(!name) return;
-    await sb.from("zones").insert({
-      operator_id: state.activeOperatorId, name: name,
+    var fields = {
+      name: name,
       road_type: document.getElementById("nzRoadType").value,
       speed_limit_mph: Number(document.getElementById("nzSpeed").value),
-      enabled_modes: ["on_demand"], active: true,
-    });
+    };
+    if(isEdit){
+      fields.active = document.getElementById("nzActive").checked;
+      await sb.from("zones").update(fields).eq("id", existing.id);
+    } else {
+      fields.operator_id = state.activeOperatorId;
+      fields.enabled_modes = ["on_demand"];
+      fields.active = true;
+      await sb.from("zones").insert(fields);
+    }
     closeModal(); await loadOperatorData(state.activeOperatorId); render();
   };
 }
@@ -325,7 +338,9 @@ function renderFleet(){
       '<div class="card fleet-card"><div><span class="badge b-ink">' + catLabel(vt.category) + '</span>' +
         '<p class="display" style="font-weight:600; font-size:18px; margin-top:10px;">' + esc(vt.label) + '</p>' +
         '<p style="font-size:12px; color:var(--slate); margin-top:4px;">Capacity: ' + vt.capacity + ' riders</p></div>' +
-        '<button class="vt-delete-btn" data-id="' + vt.id + '" data-label="' + esc(vt.label) + '" style="background:none; border:none; color:var(--coral); font-size:12px; font-weight:600; cursor:pointer;">Delete</button></div>'
+        '<div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">' +
+        '<button class="vt-edit-btn" data-idx="' + state.vehicleTypes.indexOf(vt) + '" style="background:none; border:none; color:var(--ink); font-size:12px; font-weight:600; cursor:pointer;">Edit</button>' +
+        '<button class="vt-delete-btn" data-id="' + vt.id + '" data-label="' + esc(vt.label) + '" style="background:none; border:none; color:var(--coral); font-size:12px; font-weight:600; cursor:pointer;">Delete</button></div></div>'
     );
   }).join("");
   return sectionHead("Fleet", "Real vehicle types from your operator record.",
@@ -333,15 +348,16 @@ function renderFleet(){
     '<div class="fleet-grid">' + cards + '</div>';
 }
 
-function openNewVTModal(){
+function openVTModal(existing){
+  var isEdit = !!existing;
   openModal(
-    '<div class="modal-head"><h3 class="display">New vehicle type</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
+    '<div class="modal-head"><h3 class="display">' + (isEdit?"Edit vehicle type":"New vehicle type") + '</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
     '<div class="modal-body">' +
-      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Label</span><input class="field" id="vtLabel" placeholder="e.g. 6-Seat Golf Cart"></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Label</span><input class="field" id="vtLabel" placeholder="e.g. 6-Seat Golf Cart" value="' + (isEdit?esc(existing.label):"") + '"></label>' +
       '<label style="display:block; margin-bottom:14px;"><span class="field-label">Category</span><select class="field" id="vtCategory">' +
-        vehicleCategories.map(function(c){ return '<option value="' + c.key + '">' + c.label + '</option>'; }).join("") + '</select></label>' +
-      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Capacity</span><input type="number" class="field" id="vtCapacity" value="4"></label>' +
-      '<div style="display:flex; justify-content:flex-end; gap:10px;"><button class="btn btn-ghost" id="vtCancel">Cancel</button><button class="btn btn-primary" style="width:auto;" id="vtCreate">Create</button></div>' +
+        vehicleCategories.map(function(c){ return '<option value="' + c.key + '" ' + (isEdit && existing.category===c.key?"selected":"") + '>' + c.label + '</option>'; }).join("") + '</select></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Capacity</span><input type="number" class="field" id="vtCapacity" value="' + (isEdit?existing.capacity:4) + '"></label>' +
+      '<div style="display:flex; justify-content:flex-end; gap:10px;"><button class="btn btn-ghost" id="vtCancel">Cancel</button><button class="btn btn-primary" style="width:auto;" id="vtCreate">' + (isEdit?"Save changes":"Create") + '</button></div>' +
     '</div>'
   );
   document.getElementById("modalCloseBtn").onclick = closeModal;
@@ -349,11 +365,17 @@ function openNewVTModal(){
   document.getElementById("vtCreate").onclick = async function(){
     var label = document.getElementById("vtLabel").value.trim();
     if(!label) return;
-    await sb.from("vehicle_types").insert({
-      operator_id: state.activeOperatorId, label: label,
+    var fields = {
+      label: label,
       category: document.getElementById("vtCategory").value,
       capacity: Number(document.getElementById("vtCapacity").value),
-    });
+    };
+    if(isEdit){
+      await sb.from("vehicle_types").update(fields).eq("id", existing.id);
+    } else {
+      fields.operator_id = state.activeOperatorId;
+      await sb.from("vehicle_types").insert(fields);
+    }
     closeModal(); await loadOperatorData(state.activeOperatorId); render();
   };
 }
@@ -386,7 +408,10 @@ function renderEvents(){
           '<span class="badge ' + (isClosed?"b-coral":"b-slate") + '">' + (isClosed?"Closed fleet":"Open fleet") + '</span>' +
           '<span class="badge ' + (ev.rider_access_mode==="verified"?"b-coral":"b-slate") + '">' + (ev.rider_access_mode==="verified"?"Verified riders":"Open riders") + '</span>' +
         '</div>' +
-        (isClosed ? '<button class="manage-roster-btn btn btn-ghost" data-id="' + ev.id + '" data-name="' + esc(ev.name) + '" style="margin-top:12px; padding:8px; font-size:12px;">Manage roster</button>' : '') +
+        '<div style="display:flex; gap:8px; margin-top:12px;">' +
+          '<button class="event-edit-btn btn btn-ghost" data-idx="' + state.events.indexOf(ev) + '" style="padding:8px; font-size:12px; flex:1;">Edit</button>' +
+          (isClosed ? '<button class="manage-roster-btn btn btn-ghost" data-id="' + ev.id + '" data-name="' + esc(ev.name) + '" style="padding:8px; font-size:12px; flex:1;">Manage roster</button>' : '') +
+        '</div>' +
       '</div>'
     );
   }).join("");
@@ -434,8 +459,19 @@ async function openManageRosterModal(eventId, eventName){
   };
 }
 
-function openNewEventModal(){
-  state.eventDraft = { step:1, name:"", zoneId: state.zones[0] ? state.zones[0].id : null, driverAccess:"open", riderAccess:"open", driverIds:[], boundary:null };
+async function openEventModal(existing){
+  if(existing){
+    var rosterRes = await sb.from("event_drivers").select("driver_id").eq("event_id", existing.id);
+    var existingDriverIds = (rosterRes.data || []).map(function(r){ return r.driver_id; });
+    state.eventDraft = {
+      step:1, eventId: existing.id, name: existing.name, zoneId: existing.zone_id,
+      driverAccess: existing.driver_access_mode, riderAccess: existing.rider_access_mode,
+      driverIds: existingDriverIds.slice(), originalDriverIds: existingDriverIds,
+      boundary: existing.event_boundary && existing.event_boundary.points ? existing.event_boundary.points : null,
+    };
+  } else {
+    state.eventDraft = { step:1, eventId:null, name:"", zoneId: state.zones[0] ? state.zones[0].id : null, driverAccess:"open", riderAccess:"open", driverIds:[], originalDriverIds:[], boundary:null };
+  }
   renderEventModal();
 }
 
@@ -501,11 +537,11 @@ function renderEventModal(){
     );
   }
   openModal(
-    '<div class="modal-head"><h3 class="display">New event — step ' + pos + ' of ' + seq.length + '</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
+    '<div class="modal-head"><h3 class="display">' + (d.eventId?"Edit event":"New event") + ' — step ' + pos + ' of ' + seq.length + '</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
     '<div class="modal-body">' + body +
       '<div style="display:flex; justify-content:space-between; margin-top:24px;">' +
         '<button class="btn btn-ghost" id="evBack">' + (pos>1?"Back":"Cancel") + '</button>' +
-        '<button class="btn btn-primary" style="width:auto;" id="evNext">' + (pos<seq.length?"Continue":"Create event") + '</button>' +
+        '<button class="btn btn-primary" style="width:auto;" id="evNext">' + (pos<seq.length?"Continue":(d.eventId?"Save changes":"Create event")) + '</button>' +
       '</div>' +
     '</div>'
   , true);
@@ -540,15 +576,28 @@ function renderEventModal(){
   document.getElementById("evNext").onclick = async function(){
     var i = seq.indexOf(d.step);
     if(i < seq.length-1){ d.step = seq[i+1]; renderEventModal(); return; }
-    var evRes = await sb.from("events").insert({
-      operator_id: state.activeOperatorId, zone_id: d.zoneId, name: d.name,
+    var eventFields = {
+      zone_id: d.zoneId, name: d.name,
       driver_access_mode: d.driverAccess, rider_access_mode: d.riderAccess,
       event_boundary: d.boundary && d.boundary.length>=3 ? { points: d.boundary } : null,
-      vehicle_quota: {}, status: "scheduled",
-    }).select().single();
-    if(evRes.data && d.driverAccess==="closed" && d.driverIds.length>0){
-      var rows = d.driverIds.map(function(id){ return { event_id: evRes.data.id, driver_id: id }; });
-      await sb.from("event_drivers").insert(rows);
+    };
+    var eventId = d.eventId;
+    if(eventId){
+      await sb.from("events").update(eventFields).eq("id", eventId);
+    } else {
+      eventFields.operator_id = state.activeOperatorId;
+      eventFields.vehicle_quota = {};
+      eventFields.status = "scheduled";
+      var evRes = await sb.from("events").insert(eventFields).select().single();
+      eventId = evRes.data ? evRes.data.id : null;
+    }
+    if(eventId && d.driverAccess==="closed"){
+      var toAdd = d.driverIds.filter(function(id){ return d.originalDriverIds.indexOf(id) === -1; });
+      var toRemove = d.originalDriverIds.filter(function(id){ return d.driverIds.indexOf(id) === -1; });
+      if(toAdd.length) await sb.from("event_drivers").insert(toAdd.map(function(id){ return { event_id: eventId, driver_id: id }; }));
+      for(var r=0; r<toRemove.length; r++){
+        await sb.from("event_drivers").delete().eq("event_id", eventId).eq("driver_id", toRemove[r]);
+      }
     }
     closeModal(); await loadOperatorData(state.activeOperatorId); render();
   };
@@ -578,15 +627,26 @@ function mountBoundaryMap(d){
 function renderDrivers(){
   var rows = state.approvedDrivers.map(function(a){
     var name = a.drivers && a.drivers.profiles ? a.drivers.profiles.full_name : "Unnamed driver";
+    var d = a.drivers;
+    var isMine = d && d.employment_type === "employed" && d.employing_operator_id === state.activeOperatorId;
+    var isOthers = d && d.employment_type === "employed" && d.employing_operator_id && d.employing_operator_id !== state.activeOperatorId;
+    var statusBadge = isMine ? '<span class="badge b-ink">Employed by you</span>'
+      : isOthers ? '<span class="badge b-slate">Employed elsewhere</span>'
+      : '<span class="badge b-slate">Gig (independent)</span>';
+    var actionBtn = isMine
+      ? '<button class="driver-unemploy-btn" data-id="' + (d?d.id:"") + '" data-name="' + esc(name) + '" style="background:none; border:none; color:var(--coral); font-size:12px; font-weight:600; cursor:pointer;">Remove</button>'
+      : isOthers ? ''
+      : '<button class="driver-employ-btn" data-id="' + (d?d.id:"") + '" data-name="' + esc(name) + '" style="background:none; border:none; color:var(--ink); font-size:12px; font-weight:600; cursor:pointer;">Mark as employed by you</button>';
     return (
       '<tr><td><div class="driver-row"><div class="avatar">' + (name||"?").split(" ").map(function(n){return n[0];}).join("").slice(0,2) + '</div>' + esc(name||"Unnamed") + '</div></td>' +
       '<td><span class="badge b-turf">' + catLabel(a.category) + '</span></td>' +
-      '<td><span class="badge ' + (a.drivers && a.drivers.employment_type==="employed"?"b-ink":"b-slate") + '">' + (a.drivers?a.drivers.employment_type:"—") + '</span></td></tr>'
+      '<td>' + statusBadge + '</td>' +
+      '<td>' + actionBtn + '</td></tr>'
     );
   }).join("");
-  return sectionHead("Drivers", "Platform-approved drivers — category approvals live in the platform admin, read-only here.") +
-    '<div class="card" style="overflow-x:auto;"><table><thead><tr><th>Driver</th><th>Category</th><th>Type</th></tr></thead><tbody>' +
-    (rows || '<tr><td colspan="3" style="text-align:center; color:var(--slate);">No approved drivers yet</td></tr>') + '</tbody></table></div>';
+  return sectionHead("Drivers", "Platform-approved drivers — category approvals live in the platform admin, read-only here. You can mark a driver as employed directly by your business; their ride earnings then pay out to you instead of them.") +
+    '<div class="card" style="overflow-x:auto;"><table><thead><tr><th>Driver</th><th>Category</th><th>Status</th><th></th></tr></thead><tbody>' +
+    (rows || '<tr><td colspan="4" style="text-align:center; color:var(--slate);">No approved drivers yet</td></tr>') + '</tbody></table></div>';
 }
 
 /* ---------- PRICING ---------- */
@@ -756,7 +816,10 @@ function bindResetPassword(){
 
 function bindTab(){
   if(state.tab==="zones"){
-    document.getElementById("btnNewZone").onclick = openNewZoneModal;
+    document.getElementById("btnNewZone").onclick = function(){ openZoneModal(null); };
+    document.querySelectorAll(".zone-edit-btn").forEach(function(btn){
+      btn.onclick = function(){ openZoneModal(state.zones[Number(btn.dataset.idx)]); };
+    });
     document.querySelectorAll(".zone-delete-btn").forEach(function(btn){
       btn.onclick = async function(){
         var ok = await deleteRow("zones", btn.dataset.id, btn.dataset.name);
@@ -765,7 +828,10 @@ function bindTab(){
     });
   }
   if(state.tab==="fleet"){
-    document.getElementById("btnNewVT").onclick = openNewVTModal;
+    document.getElementById("btnNewVT").onclick = function(){ openVTModal(null); };
+    document.querySelectorAll(".vt-edit-btn").forEach(function(btn){
+      btn.onclick = function(){ openVTModal(state.vehicleTypes[Number(btn.dataset.idx)]); };
+    });
     document.querySelectorAll(".vt-delete-btn").forEach(function(btn){
       btn.onclick = async function(){
         var ok = await deleteRow("vehicle_types", btn.dataset.id, btn.dataset.label);
@@ -774,7 +840,10 @@ function bindTab(){
     });
   }
   if(state.tab==="events"){
-    document.getElementById("btnNewEvent").onclick = openNewEventModal;
+    document.getElementById("btnNewEvent").onclick = function(){ openEventModal(null); };
+    document.querySelectorAll(".event-edit-btn").forEach(function(btn){
+      btn.onclick = function(){ openEventModal(state.events[Number(btn.dataset.idx)]); };
+    });
     document.querySelectorAll(".event-delete-btn").forEach(function(btn){
       btn.onclick = async function(){
         var ok = await deleteRow("events", btn.dataset.id, btn.dataset.name);
@@ -783,6 +852,23 @@ function bindTab(){
     });
     document.querySelectorAll(".manage-roster-btn").forEach(function(btn){
       btn.onclick = function(){ openManageRosterModal(btn.dataset.id, btn.dataset.name); };
+    });
+  }
+  if(state.tab==="drivers"){
+    document.querySelectorAll(".driver-employ-btn").forEach(function(btn){
+      btn.onclick = async function(){
+        var res = await sb.from("drivers").update({ employment_type:"employed", employing_operator_id: state.activeOperatorId }).eq("id", btn.dataset.id);
+        if(res.error){ alert("Couldn't update: " + res.error.message); return; }
+        await loadOperatorData(state.activeOperatorId); render();
+      };
+    });
+    document.querySelectorAll(".driver-unemploy-btn").forEach(function(btn){
+      btn.onclick = async function(){
+        if(!confirm('Remove "' + btn.dataset.name + '" as an employed driver? They\'ll become an independent (gig) driver again.')) return;
+        var res = await sb.from("drivers").update({ employment_type:"gig", employing_operator_id: null }).eq("id", btn.dataset.id);
+        if(res.error){ alert("Couldn't update: " + res.error.message); return; }
+        await loadOperatorData(state.activeOperatorId); render();
+      };
     });
   }
   if(state.tab==="pricing"){
