@@ -125,7 +125,7 @@ var state = {
   screen: "loading", authMode: "login", authError: null, session: null, profile: null, operator: null,
   tab: "overview", zones: [], vehicleTypes: [], events: [], approvedDrivers: [], pricing: null,
   eventDraft: null,
-  isSuperAdmin: false, allOperators: [], activeOperatorId: null,
+  isSuperAdmin: false, allOperators: [], activeOperatorId: null, viewingAll: false, allZones: [], allEvents: [], allVehicleTypes: [],
 };
 
 function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
@@ -213,6 +213,23 @@ async function loadOperatorData(opId){
   }
 }
 
+async function loadAllOperatorsData(){
+  var opsRes = await sb.from("operators").select("*").order("display_name");
+  state.allOperators = opsRes.data || [];
+
+  var zonesRes = await sb.from("zones").select("*, operators(display_name)");
+  state.allZones = zonesRes.data || [];
+
+  var vtRes = await sb.from("vehicle_types").select("*, operators(display_name)");
+  state.allVehicleTypes = vtRes.data || [];
+
+  var evRes = await sb.from("events").select("*, operators(display_name)").order("created_at", { ascending:false });
+  state.allEvents = evRes.data || [];
+
+  var drRes = await sb.from("category_approvals").select("*, drivers(id, employment_type, employing_operator_id, profiles(full_name))").eq("status", "approved");
+  state.approvedDrivers = drRes.data || [];
+}
+
 /* ---------- SHELL ---------- */
 
 function sectionHead(title, desc, actionHtml){
@@ -225,13 +242,16 @@ function renderShell(){
   var navHtml = NAV.map(function(pair){
     return '<button class="nav-item ' + (state.tab===pair[0]?"active":"") + '" data-tab="' + pair[0] + '">' + pair[1] + '</button>';
   }).join("");
+  var opCardHtml = state.viewingAll
+    ? '<div class="op-card"><div class="name">All operators</div><span class="badge b-gold">' + state.allOperators.length + ' total</span>'
+    : '<div class="op-card"><div class="name">' + esc(state.operator.display_name) + '</div>' +
+      '<span class="badge ' + (state.operator.verified?"b-turf":"b-coral") + '">' + (state.operator.verified?"Verified":"Pending review") + '</span>';
   document.getElementById("root").innerHTML = (
     '<div class="app">' +
       '<aside class="sidebar">' +
         '<div class="logo-row"><img class="logo-mark" src="/logo.png"><div class="logo-text"><div class="t1">KARTS2ME</div><div class="t2">Mini Transit</div></div></div>' +
         '<nav class="nav">' + navHtml + '</nav>' +
-        '<div class="op-card"><div class="name">' + esc(state.operator.display_name) + '</div>' +
-          '<span class="badge ' + (state.operator.verified?"b-turf":"b-coral") + '">' + (state.operator.verified?"Verified":"Pending review") + '</span>' +
+        opCardHtml +
           (state.isSuperAdmin ? '<button id="switchOperatorBtn">Switch operator</button>' : "") +
           (deferredInstallPrompt && !isStandalone() ? '<button id="installAppBtn">Install app</button>' : "") +
           '<button id="logoutBtn">Log out</button></div>' +
@@ -628,12 +648,13 @@ function renderDrivers(){
   var rows = state.approvedDrivers.map(function(a){
     var name = a.drivers && a.drivers.profiles ? a.drivers.profiles.full_name : "Unnamed driver";
     var d = a.drivers;
-    var isMine = d && d.employment_type === "employed" && d.employing_operator_id === state.activeOperatorId;
+    var isMine = d && !state.viewingAll && state.activeOperatorId && d.employment_type === "employed" && d.employing_operator_id === state.activeOperatorId;
     var isOthers = d && d.employment_type === "employed" && d.employing_operator_id && d.employing_operator_id !== state.activeOperatorId;
     var statusBadge = isMine ? '<span class="badge b-ink">Employed by you</span>'
-      : isOthers ? '<span class="badge b-slate">Employed elsewhere</span>'
+      : isOthers ? '<span class="badge b-slate">Employed' + (state.viewingAll && d.employing_operator_id ? "" : " elsewhere") + '</span>'
       : '<span class="badge b-slate">Gig (independent)</span>';
-    var actionBtn = isMine
+    var actionBtn = state.viewingAll ? ''
+      : isMine
       ? '<button class="driver-unemploy-btn" data-id="' + (d?d.id:"") + '" data-name="' + esc(name) + '" style="background:none; border:none; color:var(--coral); font-size:12px; font-weight:600; cursor:pointer;">Remove</button>'
       : isOthers ? ''
       : '<button class="driver-employ-btn" data-id="' + (d?d.id:"") + '" data-name="' + esc(name) + '" style="background:none; border:none; color:var(--ink); font-size:12px; font-weight:600; cursor:pointer;">Mark as employed by you</button>';
@@ -743,9 +764,19 @@ function render(){
   }
   if(state.screen==="chooseOperator"){
     document.getElementById("root").innerHTML = screenChooseOperator();
+    var allBtn = document.querySelector(".op-choice-all-btn");
+    if(allBtn) allBtn.onclick = async function(){
+      state.viewingAll = true;
+      state.activeOperatorId = null;
+      await loadAllOperatorsData();
+      state.tab = "overview";
+      state.screen = "dashboard";
+      render();
+    };
     document.querySelectorAll(".op-choice-btn").forEach(function(btn){
       btn.onclick = async function(){
         var o = state.allOperators[Number(btn.dataset.idx)];
+        state.viewingAll = false;
         state.activeOperatorId = o.id;
         await loadOperatorData(state.activeOperatorId);
         state.screen = "dashboard";
@@ -756,9 +787,68 @@ function render(){
   }
 
   renderShell();
-  var map = { overview:renderOverview, zones:renderZones, fleet:renderFleet, events:renderEvents, drivers:renderDrivers, pricing:renderPricing, payouts:renderPayouts, branding:renderBranding };
+  var map = state.viewingAll
+    ? { overview:renderAllOverview, zones:renderAllZones, fleet:renderAllFleet, events:renderAllEvents, drivers:renderDrivers, pricing:renderNeedsOperator, payouts:renderNeedsOperator, branding:renderNeedsOperator }
+    : { overview:renderOverview, zones:renderZones, fleet:renderFleet, events:renderEvents, drivers:renderDrivers, pricing:renderPricing, payouts:renderPayouts, branding:renderBranding };
   document.getElementById("main").innerHTML = map[state.tab]();
   bindTab();
+}
+
+function renderNeedsOperator(){
+  return sectionHead("Select an operator", "This section is specific to one property — switch to a specific operator to manage it.") +
+    '<div class="panel" style="padding:32px; text-align:center; color:var(--slate);">Click "Switch operator" in the sidebar and choose a specific property.</div>';
+}
+
+function renderAllOverview(){
+  return (
+    sectionHead("All Operators — Overview", "A read-only snapshot across every operator on the platform.") +
+    '<div class="stat-row">' +
+      '<div class="card stat"><div class="label">Operators</div><div class="value">' + state.allOperators.length + '</div></div>' +
+      '<div class="card stat"><div class="label">Zones</div><div class="value">' + state.allZones.length + '</div></div>' +
+      '<div class="card stat"><div class="label">Vehicle types</div><div class="value">' + state.allVehicleTypes.length + '</div></div>' +
+      '<div class="card stat"><div class="label">Events</div><div class="value">' + state.allEvents.length + '</div></div>' +
+    '</div>'
+  );
+}
+
+function renderAllZones(){
+  var rows = state.allZones.map(function(z){
+    return (
+      '<tr><td>' + esc(z.name) + '</td><td style="color:var(--slate);">' + esc(z.operators ? z.operators.display_name : "—") + '</td>' +
+      '<td class="mono">' + (z.speed_limit_mph||"—") + ' mph</td>' +
+      '<td><span class="badge ' + (z.active?"b-turf":"b-slate") + '">' + (z.active?"Active":"Inactive") + '</span></td></tr>'
+    );
+  }).join("");
+  return sectionHead("All Zones", "Every zone across every operator. Switch to a specific operator to edit.") +
+    '<div class="card" style="overflow-x:auto;"><table><thead><tr><th>Zone</th><th>Operator</th><th>Speed limit</th><th>Status</th></tr></thead><tbody>' +
+    (rows || '<tr><td colspan="4" style="text-align:center; color:var(--slate);">No zones yet</td></tr>') + '</tbody></table></div>';
+}
+
+function renderAllFleet(){
+  var cards = state.allVehicleTypes.map(function(vt){
+    return (
+      '<div class="card fleet-card"><div><span class="badge b-ink">' + catLabel(vt.category) + '</span>' +
+        '<p class="display" style="font-weight:600; font-size:18px; margin-top:10px;">' + esc(vt.label) + '</p>' +
+        '<p style="font-size:12px; color:var(--slate); margin-top:4px;">' + esc(vt.operators?vt.operators.display_name:"—") + ' &middot; Capacity: ' + vt.capacity + '</p></div></div>'
+    );
+  }).join("");
+  return sectionHead("All Fleet", "Every vehicle type across every operator. Switch to a specific operator to edit.") +
+    '<div class="fleet-grid">' + (cards || '<p style="color:var(--slate);">No vehicle types yet</p>') + '</div>';
+}
+
+function renderAllEvents(){
+  var cards = state.allEvents.map(function(ev){
+    var isClosed = ev.driver_access_mode === "closed";
+    return (
+      '<div class="card event-card"><p class="display" style="font-weight:600; font-size:18px;">' + esc(ev.name) + '</p>' +
+        '<p style="font-size:12px; color:var(--slate); margin-top:2px;">' + esc(ev.operators?ev.operators.display_name:"—") + ' &middot; ' + esc(ev.status) + '</p>' +
+        '<div class="chip-row" style="margin-top:12px;">' +
+          '<span class="badge ' + (isClosed?"b-coral":"b-slate") + '">' + (isClosed?"Closed fleet":"Open fleet") + '</span>' +
+        '</div></div>'
+    );
+  }).join("");
+  return sectionHead("All Events", "Every event across every operator. Switch to a specific operator to edit.") +
+    '<div class="event-grid">' + (cards || '<p style="color:var(--slate);">No events yet</p>') + '</div>';
 }
 
 function bindAuth(){
@@ -815,6 +905,7 @@ function bindResetPassword(){
 }
 
 function bindTab(){
+  if(state.viewingAll) return; // aggregate views are read-only, nothing to bind
   if(state.tab==="zones"){
     document.getElementById("btnNewZone").onclick = function(){ openZoneModal(null); };
     document.querySelectorAll(".zone-edit-btn").forEach(function(btn){
@@ -956,7 +1047,10 @@ function screenChooseOperator(){
   return (
     '<div class="authwrap"><div class="authbox" style="max-width:420px; text-align:left;">' +
       '<p class="display" style="font-size:18px; font-weight:600; margin-bottom:4px;">Choose an operator</p>' +
-      '<p style="font-size:12px; color:var(--slate); margin-bottom:18px;">Platform admin access — pick which operator\'s dashboard to view.</p>' +
+      '<p style="font-size:12px; color:var(--slate); margin-bottom:18px;">Platform admin access — pick which operator\'s dashboard to view, or see everything at once.</p>' +
+      '<button class="op-choice-all-btn" style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-radius:10px; border:1px solid var(--gold); background:var(--orange-light); width:100%; text-align:left; margin-bottom:12px;">' +
+        '<span style="font-size:14px; font-weight:700; color:var(--ink);">&#127760; All operators</span>' +
+        '<span style="font-size:11px; color:var(--slate);">Read-only overview</span></button>' +
       (ops.length===0 ?
         '<p style="font-size:13px; color:var(--slate); padding:16px 0;">No operators exist yet.</p>'
         :
