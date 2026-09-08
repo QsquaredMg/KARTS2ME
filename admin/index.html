@@ -106,7 +106,7 @@ var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 var state = {
   screen: "loading", authMode: "login", authError: null, session: null, profile: null,
-  tab: "overview", operators: [], queue: [], reqs: [], tickets: [],
+  tab: "overview", operators: [], queue: [], reqs: [], tickets: [], refundQueue: [],
 };
 
 function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
@@ -176,10 +176,13 @@ async function loadAdminData(){
 
   var tRes = await sb.from("support_tickets").select("*, operators(display_name)").order("created_at", { ascending:false });
   state.tickets = tRes.data || [];
+
+  var rfRes = await sb.from("refund_requests").select("*, rides(dropoff_label, fare_cents, requested_at), profiles!refund_requests_requested_by_fkey(full_name)").eq("status", "pending").order("created_at", { ascending:false });
+  state.refundQueue = rfRes.data || [];
 }
 
 function sectionHead(title, desc){ return '<div class="section-head"><div><h2 class="display">' + title + '</h2><p>' + desc + '</p></div></div>'; }
-var NAV = [["overview","Overview"],["operators","Operators"],["approvals","Driver Approvals"],["requirements","Category Requirements"],["support","Support"]];
+var NAV = [["overview","Overview"],["operators","Operators"],["approvals","Driver Approvals"],["refunds","Refunds"],["requirements","Category Requirements"],["support","Support"]];
 
 function renderShell(){
   var navHtml = NAV.map(function(pair){
@@ -261,6 +264,29 @@ function openOperatorModal(id){
   };
 }
 
+function renderRefunds(){
+  if(state.refundQueue.length===0){
+    return sectionHead("Refund Requests", "Rider-submitted refund requests awaiting review.") +
+      '<div class="panel" style="padding:32px; text-align:center; color:var(--slate);">Queue clear — no pending refund requests.</div>';
+  }
+  var rows = state.refundQueue.map(function(rf){
+    var riderName = rf.profiles ? rf.profiles.full_name : "Unknown rider";
+    var ride = rf.rides;
+    return (
+      '<div class="panel approval-row"><div>' +
+        '<p style="font-weight:600; color:#fff;">' + esc(riderName) + '</p>' +
+        '<p style="font-size:12px; color:var(--slate); margin-top:2px;">' + esc(ride?ride.dropoff_label:"Ride") + ' &middot; ' + (ride && ride.fare_cents ? "$"+(ride.fare_cents/100).toFixed(2) : "—") + ' &middot; ' + (ride?new Date(ride.requested_at).toLocaleDateString():"") + '</p>' +
+        '<p style="font-size:13px; color:#fff; margin-top:8px; max-width:400px;">"' + esc(rf.reason) + '"</p></div>' +
+        '<div style="display:flex; gap:8px;">' +
+        '<button class="btn btn-danger refund-deny-btn" data-id="' + rf.id + '" style="padding:8px 14px; font-size:12px;">Deny</button>' +
+        '<button class="btn btn-primary refund-approve-btn" data-id="' + rf.id + '" style="width:auto; padding:8px 14px; font-size:12px;">Approve refund</button>' +
+        '</div></div>'
+    );
+  }).join("");
+  return sectionHead("Refund Requests", "Approving triggers a real Stripe refund \u2014 this can't be undone.") +
+    '<div style="display:flex; flex-direction:column; gap:12px;">' + rows + '</div>';
+}
+
 function renderApprovals(){
   if(state.queue.length===0){
     return sectionHead("Driver Category Approvals", "Platform-level review queue.") +
@@ -273,7 +299,11 @@ function renderApprovals(){
       '<div class="panel approval-row"><div style="display:flex; align-items:center; gap:14px;">' +
         '<div class="avatar">' + (name||"?").split(" ").map(function(n){return n[0];}).join("").slice(0,2) + '</div>' +
         '<div><p style="font-weight:600; color:#fff;">' + esc(name) + '</p><p style="font-size:12px; color:var(--slate);">Applying for <span class="mono">' + q.category + '</span></p>' +
-        '<span class="badge ' + (idVerified?"b-turf":"b-coral") + '" style="margin-top:6px;">' + (idVerified?"ID verified":"ID not verified") + '</span></div></div>' +
+        '<span class="badge ' + (idVerified?"b-turf":"b-coral") + '" style="margin-top:6px;">' + (idVerified?"ID verified":"ID not verified") + '</span>' +
+        '<div style="margin-top:8px; display:flex; gap:10px;">' +
+          (q.license_doc_url ? '<button class="doc-view-btn" data-path="' + esc(q.license_doc_url) + '" style="background:none; border:none; color:var(--gold); font-size:12px; text-decoration:underline; cursor:pointer; padding:0;">View license</button>' : '<span style="font-size:12px; color:var(--slate);">No license on file</span>') +
+          (q.insurance_doc_url ? '<button class="doc-view-btn" data-path="' + esc(q.insurance_doc_url) + '" style="background:none; border:none; color:var(--gold); font-size:12px; text-decoration:underline; cursor:pointer; padding:0;">View insurance</button>' : '<span style="font-size:12px; color:var(--slate);">No insurance on file</span>') +
+        '</div></div></div>' +
         '<div style="display:flex; gap:8px;"><button class="btn btn-danger reject-btn" data-id="' + q.id + '" style="padding:8px 14px; font-size:12px;">Reject</button>' +
         '<button class="btn btn-primary approve-btn" data-id="' + q.id + '" style="width:auto; padding:8px 14px; font-size:12px;">Approve</button></div></div>'
     );
@@ -326,7 +356,7 @@ function render(){
   }
 
   renderShell();
-  var map = { overview:renderOverview, operators:renderOperators, approvals:renderApprovals, requirements:renderRequirements, support:renderSupport };
+  var map = { overview:renderOverview, operators:renderOperators, approvals:renderApprovals, refunds:renderRefunds, requirements:renderRequirements, support:renderSupport };
   document.getElementById("main").innerHTML = map[state.tab]();
   bindTab();
 }
@@ -389,6 +419,15 @@ function bindTab(){
     document.querySelectorAll("tr[data-op]").forEach(function(row){ row.onclick = function(){ openOperatorModal(row.dataset.op); }; });
   }
   if(state.tab==="approvals"){
+    document.querySelectorAll(".doc-view-btn").forEach(function(btn){
+      btn.onclick = async function(){
+        btn.disabled = true;
+        var res = await sb.storage.from("driver-documents").createSignedUrl(btn.dataset.path, 300);
+        btn.disabled = false;
+        if(res.error || !res.data){ alert("Couldn't load document: " + (res.error?res.error.message:"unknown error")); return; }
+        window.open(res.data.signedUrl, "_blank");
+      };
+    });
     document.querySelectorAll(".approve-btn").forEach(function(btn){
       btn.onclick = async function(){
         await sb.from("category_approvals").update({ status:"approved", approved_at:new Date().toISOString() }).eq("id", btn.dataset.id);
@@ -399,6 +438,48 @@ function bindTab(){
       btn.onclick = async function(){
         await sb.from("category_approvals").update({ status:"rejected" }).eq("id", btn.dataset.id);
         await loadAdminData(); render();
+      };
+    });
+  }
+  if(state.tab==="refunds"){
+    async function callProcessRefund(requestId, action){
+      var res = await fetch(SUPABASE_URL + "/functions/v1/process-refund", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.session.access_token, "apikey": SUPABASE_ANON_KEY },
+        body: JSON.stringify({ request_id: requestId, action: action }),
+      });
+      var data = await res.json();
+      if(!res.ok || !data.success){
+        alert("Couldn't process: " + (data.error || data.message || "unknown error"));
+        return false;
+      }
+      return true;
+    }
+    document.querySelectorAll(".refund-approve-btn").forEach(function(btn){
+      btn.onclick = async function(){
+        if(!confirm("This issues a real Stripe refund to the rider's original payment method. Continue?")) return;
+        btn.disabled = true; btn.textContent = "Processing…";
+        try{
+          var ok = await callProcessRefund(btn.dataset.id, "approve");
+          if(ok){ await loadAdminData(); render(); }
+          else { btn.disabled = false; btn.textContent = "Approve refund"; }
+        } catch(e){
+          alert("Couldn't reach the server. Check your connection and try again.");
+          btn.disabled = false; btn.textContent = "Approve refund";
+        }
+      };
+    });
+    document.querySelectorAll(".refund-deny-btn").forEach(function(btn){
+      btn.onclick = async function(){
+        btn.disabled = true;
+        try{
+          var ok = await callProcessRefund(btn.dataset.id, "deny");
+          if(ok){ await loadAdminData(); render(); }
+          else { btn.disabled = false; }
+        } catch(e){
+          alert("Couldn't reach the server. Check your connection and try again.");
+          btn.disabled = false;
+        }
       };
     });
   }

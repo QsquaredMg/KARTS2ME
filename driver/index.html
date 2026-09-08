@@ -275,10 +275,12 @@ function screenApply(){
       '<select id="applyCategory" class="field">' +
         vehicleCategories.map(function(c){ return '<option value="'+c.key+'" '+(c.key===state.applyCategory?"selected":"")+'>'+c.label+'</option>'; }).join("") +
       '</select>' +
-      '<input id="applyLicense" class="field" placeholder="License doc URL or reference (placeholder)">' +
-      '<input id="applyInsurance" class="field" placeholder="Insurance doc URL or reference (placeholder)">' +
+      '<label style="display:block; font-size:11px; font-weight:600; text-transform:uppercase; color:var(--slate); margin-top:14px; margin-bottom:6px;">Driver\'s license (photo or PDF)</label>' +
+      '<input id="applyLicenseFile" type="file" accept="image/*,application/pdf" class="field">' +
+      '<label style="display:block; font-size:11px; font-weight:600; text-transform:uppercase; color:var(--slate); margin-top:14px; margin-bottom:6px;">Proof of insurance (photo or PDF)</label>' +
+      '<input id="applyInsuranceFile" type="file" accept="image/*,application/pdf" class="field">' +
       (state.applyError ? '<div class="errbox">'+esc(state.applyError)+'</div>' : "") +
-      '<button id="applySubmit" class="btn-primary" style="margin-top:6px;">Submit application</button>' +
+      '<button id="applySubmit" class="btn-primary" style="margin-top:16px;">Submit application</button>' +
       (state.approvals.length>0 ? '<button id="skipToStatus" style="background:none; border:none; margin-top:14px; font-size:13px; color:var(--slate); text-decoration:underline; display:block; width:100%; text-align:center;">Back to my applications</button>' : "") +
     '</div>'
   );
@@ -597,15 +599,38 @@ function bindApply(){
   if(skip) skip.onclick = function(){ go("status"); };
   document.getElementById("applySubmit").onclick = async function(){
     var cat = document.getElementById("applyCategory").value;
-    var lic = document.getElementById("applyLicense").value.trim();
-    var ins = document.getElementById("applyInsurance").value.trim();
-    var res = await sb.from("category_approvals").insert({
-      driver_id: state.session.user.id, category: cat,
-      license_doc_url: lic || null, insurance_doc_url: ins || null, status: "pending",
-    });
-    if(res.error){ state.applyError = res.error.message; render(); return; }
-    await loadApprovals();
-    go("status");
+    var licFile = document.getElementById("applyLicenseFile").files[0];
+    var insFile = document.getElementById("applyInsuranceFile").files[0];
+    if(!licFile || !insFile){
+      state.applyError = "Please upload both your license and proof of insurance.";
+      render();
+      return;
+    }
+    var submitBtn = document.getElementById("applySubmit");
+    submitBtn.disabled = true; submitBtn.textContent = "Uploading…";
+    var uid = state.session.user.id;
+    var stamp = Date.now();
+    var licExt = (licFile.name.split(".").pop() || "jpg").toLowerCase();
+    var insExt = (insFile.name.split(".").pop() || "jpg").toLowerCase();
+    var licPath = uid + "/" + stamp + "-license." + licExt;
+    var insPath = uid + "/" + stamp + "-insurance." + insExt;
+    try{
+      var licUp = await sb.storage.from("driver-documents").upload(licPath, licFile);
+      if(licUp.error) throw new Error(licUp.error.message);
+      var insUp = await sb.storage.from("driver-documents").upload(insPath, insFile);
+      if(insUp.error) throw new Error(insUp.error.message);
+      var res = await sb.from("category_approvals").insert({
+        driver_id: uid, category: cat,
+        license_doc_url: licPath, insurance_doc_url: insPath, status: "pending",
+      });
+      if(res.error) throw new Error(res.error.message);
+      await loadApprovals();
+      go("status");
+    } catch(e){
+      state.applyError = e.message || "Upload failed. Please try again.";
+      submitBtn.disabled = false; submitBtn.textContent = "Submit application";
+      render();
+    }
   };
 }
 

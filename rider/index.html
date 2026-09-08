@@ -56,12 +56,19 @@
   .errbox{ background:#FBE7E1; color:#C24B31; border-radius:10px; padding:10px 12px; font-size:12px; margin-top:8px; }
   .leaflet-container{ background:var(--ink) !important; font-family:'Inter',sans-serif; }
   .k2-pin{ width:14px; height:14px; border-radius:99px; box-shadow:0 0 0 4px rgba(232,168,60,0.25); }
+  .modal-backdrop{position:fixed; inset:0; background:rgba(14,26,43,0.55); display:flex; align-items:center; justify-content:center; padding:16px; z-index:200;}
+  .modal-backdrop.hidden{display:none;}
+  .modal{background:#fff; border-radius:20px; width:100%; max-width:340px; max-height:85vh; overflow-y:auto;}
+  .modal-head{display:flex; align-items:center; justify-content:space-between; padding:18px 20px 14px; border-bottom:1px solid #eee;}
+  .modal-close{background:none; border:none; font-size:22px; color:var(--slate); cursor:pointer; line-height:1;}
+  .modal-body{padding:20px;}
 </style>
 </head>
 <body>
 <div class="phone">
   <img class="app-logo-badge" src="/logo.png" alt="Karts2Me logo">
   <div class="screen" id="screen"></div>
+  <div class="modal-backdrop hidden" id="modalBackdrop"><div class="modal" id="modal"></div></div>
 </div>
 
 <script>
@@ -99,6 +106,8 @@ var state = {
   destCoords: null,
   routeEtaMinutes: null,
   routeDistanceMiles: null,
+  rideHistory: [],
+  refundsByRide: {},
   addressQuery: "",
   addressResults: [],
   addressSearching: false,
@@ -163,6 +172,19 @@ async function loadAvailableLocations(){
     return { kind:"event", id:e.zone_id, eventId:e.id, operatorId:e.operator_id, name:e.name, operatorName: e.operators ? e.operators.display_name : "Karts2Me" };
   });
   state.availableLocations = events.concat(zones);
+}
+
+async function loadRideHistory(){
+  var ridesRes = await sb.from("rides").select("*").eq("primary_rider_id", state.session.user.id).order("requested_at", { ascending:false }).limit(50);
+  state.rideHistory = ridesRes.data || [];
+  var ids = state.rideHistory.map(function(r){ return r.id; });
+  if(ids.length){
+    var refundsRes = await sb.from("refund_requests").select("ride_id,status").in("ride_id", ids);
+    state.refundsByRide = {};
+    (refundsRes.data || []).forEach(function(r){ state.refundsByRide[r.ride_id] = r.status; });
+  } else {
+    state.refundsByRide = {};
+  }
 }
 
 async function fetchRoute(from, to){
@@ -382,7 +404,10 @@ function screenHome(){
     '<div style="padding-bottom:24px;">' +
       '<div style="display:flex; align-items:center; justify-content:space-between; padding:48px 20px 16px;">' +
         '<div><p class="mono" style="font-size:12px; color:var(--slate);">Good afternoon</p><p class="display" style="font-size:20px; font-weight:600;">Where to?</p></div>' +
+        '<div style="display:flex; gap:8px;">' +
+        '<button id="historyBtn" style="width:36px; height:36px; border-radius:99px; background:var(--ink); color:#fff; border:none; font-size:16px;">&#128337;</button>' +
         '<button id="logoutBtn" style="width:36px; height:36px; border-radius:99px; background:var(--ink); color:#fff; border:none; font-size:14px;">&#9099;</button>' +
+        '</div>' +
       '</div>' +
       '<button id="changeLocationBtn" style="display:flex; align-items:center; gap:6px; margin:0 20px 12px; background:none; border:none; padding:0;">' +
         '<span style="color:var(--orange); font-size:14px;">&#128205;</span><span style="font-size:13px; font-weight:600; color:var(--ink);">' + esc(state.zoneName || "") + '</span>' +
@@ -442,6 +467,55 @@ function searchAddress(query){
         render();
       });
   }, 450);
+}
+
+function screenHistory(){
+  var rows = state.rideHistory.map(function(r){
+    var tone = r.status==="completed" ? "b-turf" : r.status==="cancelled" ? "b-coral" : "b-gold";
+    var refundStatus = state.refundsByRide[r.id];
+    var canRefund = r.status==="completed" && r.paid && r.fare_cents>0 && !refundStatus;
+    var refundBadge = refundStatus ? '<span class="badge ' + (refundStatus==="approved"?"b-turf":refundStatus==="denied"?"b-coral":"b-gold") + '" style="margin-top:6px;">Refund ' + refundStatus + '</span>' : "";
+    return (
+      '<div class="card" style="padding:16px; margin-bottom:10px;">' +
+        '<div style="display:flex; justify-content:space-between; align-items:flex-start;">' +
+          '<div><p style="font-size:14px; font-weight:600;">' + esc(r.dropoff_label || "Ride") + '</p>' +
+          '<p style="font-size:12px; color:var(--slate); margin-top:2px;">' + new Date(r.requested_at).toLocaleDateString() + '</p></div>' +
+          '<div style="text-align:right;"><p style="font-size:14px; font-weight:600;">' + (r.fare_cents ? "$"+(r.fare_cents/100).toFixed(2) : "—") + '</p>' +
+          '<span class="badge ' + tone + '">' + esc(r.status) + '</span></div>' +
+        '</div>' +
+        refundBadge +
+        (canRefund ? '<button class="request-refund-btn" data-id="' + r.id + '" style="margin-top:10px; background:none; border:none; color:var(--coral); font-size:12px; font-weight:600; text-decoration:underline; cursor:pointer; padding:0;">Request a refund</button>' : "") +
+      '</div>'
+    );
+  }).join("");
+  return (
+    '<div class="topbar"><button id="backHome" style="background:none; border:none; font-size:20px;">&larr;</button><p class="display" style="font-weight:600; font-size:15px;">Ride history</p><div style="width:24px;"></div></div>' +
+    '<div style="padding:0 20px;">' +
+      (rows || '<p style="font-size:13px; color:var(--slate); text-align:center; padding:40px 0;">No rides yet.</p>') +
+    '</div>'
+  );
+}
+
+function openRefundModal(rideId){
+  openModal(
+    '<div class="modal-head"><h3 class="display">Request a refund</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
+    '<div class="modal-body">' +
+      '<p style="font-size:13px; color:var(--slate); margin-bottom:12px;">Tell us what happened. A platform admin will review this request.</p>' +
+      '<textarea id="refundReason" class="field" rows="4" placeholder="What went wrong with this ride?" style="resize:vertical;"></textarea>' +
+      '<div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;"><button class="btn-ghost" id="refundCancel">Cancel</button><button class="btn-primary" style="width:auto; padding:10px 18px;" id="refundSubmit">Submit request</button></div>' +
+    '</div>'
+  );
+  document.getElementById("modalCloseBtn").onclick = closeModal;
+  document.getElementById("refundCancel").onclick = closeModal;
+  document.getElementById("refundSubmit").onclick = async function(){
+    var reason = document.getElementById("refundReason").value.trim();
+    if(!reason){ alert("Please describe what happened."); return; }
+    var res = await sb.from("refund_requests").insert({ ride_id: rideId, requested_by: state.session.user.id, reason: reason });
+    if(res.error){ alert("Couldn't submit: " + res.error.message); return; }
+    closeModal();
+    await loadRideHistory();
+    render();
+  };
 }
 
 function screenSearch(){
@@ -726,7 +800,7 @@ function screenLoading(){
 
 function render(){
   var map = { loading:screenLoading, auth:screenAuth, forgotPassword:screenForgotPassword, resetPassword:screenResetPassword, terms:screenTerms, chooseLocation:screenChooseLocation, home:screenHome, search:screenSearch, mode:screenMode, confirm:screenConfirm,
-    split:screenSplit, payment:screenPayment, matching:screenMatching, active:screenActive, post:screenPost };
+    split:screenSplit, payment:screenPayment, matching:screenMatching, active:screenActive, post:screenPost, history:screenHistory };
   document.getElementById("screen").innerHTML = map[state.screen]();
   bind();
   if(state.screen==="home") setTimeout(function(){ mountMap("homeMap"); }, 0);
@@ -734,8 +808,18 @@ function render(){
   if(state.screen==="active") setTimeout(function(){ mountMap("activeMap"); }, 0);
 }
 
+function openModal(html){ document.getElementById("modal").innerHTML = html; document.getElementById("modalBackdrop").classList.remove("hidden"); }
+function closeModal(){ document.getElementById("modalBackdrop").classList.add("hidden"); }
+
 function bind(){
   var s = state.screen;
+
+  if(s==="history"){
+    document.getElementById("backHome").onclick = function(){ go("home"); };
+    document.querySelectorAll(".request-refund-btn").forEach(function(btn){
+      btn.onclick = function(){ openRefundModal(btn.dataset.id); };
+    });
+  }
 
   if(s==="auth"){
     document.getElementById("authToggle").onclick = function(){
@@ -815,6 +899,7 @@ function bind(){
   if(s==="home"){
     document.getElementById("goSearch").onclick = function(){ go("search"); };
     document.getElementById("logoutBtn").onclick = async function(){ await sb.auth.signOut(); location.reload(); };
+    document.getElementById("historyBtn").onclick = async function(){ await loadRideHistory(); go("history"); };
     document.getElementById("changeLocationBtn").onclick = async function(){ await loadAvailableLocations(); go("chooseLocation"); };
     var pushBtn = document.getElementById("enablePushBtn");
     if(pushBtn) pushBtn.onclick = async function(){ var ok = await enablePushNotifications(); if(ok) render(); };
