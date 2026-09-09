@@ -208,6 +208,15 @@ async function fetchRoute(from, to){
   }
 }
 
+function normalizePhone(raw){
+  if(!raw) return null;
+  var digits = raw.replace(/[^0-9]/g, "");
+  if(digits.length === 10) return "+1" + digits;
+  if(digits.length === 11 && digits[0] === "1") return "+" + digits;
+  if(raw.trim().indexOf("+") === 0) return "+" + digits;
+  return digits ? "+" + digits : null;
+}
+
 async function loadZoneData(){
   if(!state.zoneId) return;
   var poisRes = await sb.from("points_of_interest").select("id,name,lat,lng").eq("zone_id", state.zoneId);
@@ -261,6 +270,7 @@ function screenAuth(){
         '</div>'
       ) +
       (isSignup ? '<input id="authName" class="field" placeholder="Full name" style="margin-bottom:10px;">' : "") +
+      (isSignup ? '<input id="authPhone" class="field" placeholder="Phone (for text updates)" type="tel" style="margin-bottom:10px;">' : "") +
       '<input id="authEmail" class="field" placeholder="Email" type="email" style="margin-bottom:10px;">' +
       '<input id="authPassword" class="field" placeholder="Password" type="password" style="margin-bottom:6px;">' +
       (state.authError ? '<div class="errbox">' + esc(state.authError) + '</div>' : "") +
@@ -833,7 +843,9 @@ function bind(){
       var res;
       if(state.authMode==="signup"){
         var name = document.getElementById("authName").value.trim();
-        res = await sb.auth.signUp({ email:email, password:password, options:{ data:{ full_name:name, role:"rider" } } });
+        var phoneRaw = document.getElementById("authPhone").value.trim();
+        var phone = normalizePhone(phoneRaw);
+        res = await sb.auth.signUp({ email:email, password:password, options:{ data:{ full_name:name, role:"rider", phone:phone } } });
       } else {
         res = await sb.auth.signInWithPassword({ email:email, password:password });
       }

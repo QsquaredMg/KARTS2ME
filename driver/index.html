@@ -184,6 +184,7 @@ function screenAuth(){
         '<p style="font-size:13px; color:var(--slate); margin-top:4px;">' + (isSignup?"Apply for a vehicle category to get started":"Log back in to your driver account") + '</p>' +
       '</div>' +
       (isSignup ? '<input id="authName" class="field" placeholder="Full name">' : "") +
+      (isSignup ? '<input id="authPhone" class="field" placeholder="Phone (for text updates)" type="tel">' : "") +
       '<input id="authEmail" class="field" placeholder="Email" type="email">' +
       '<input id="authPassword" class="field" placeholder="Password" type="password">' +
       (state.authError ? '<div class="errbox">'+esc(state.authError)+'</div>' : "") +
@@ -539,7 +540,9 @@ function bindAuth(){
     var res;
     if(state.authMode==="signup"){
       var name = document.getElementById("authName").value.trim();
-      res = await sb.auth.signUp({ email:email, password:password, options:{ data:{ full_name:name, role:"driver" } } });
+      var phoneRaw = document.getElementById("authPhone").value.trim();
+      var phone = normalizePhone(phoneRaw);
+      res = await sb.auth.signUp({ email:email, password:password, options:{ data:{ full_name:name, role:"driver", phone:phone } } });
     } else {
       res = await sb.auth.signInWithPassword({ email:email, password:password });
     }
@@ -792,6 +795,15 @@ async function afterAuth(){
   state.tab = "home"; state.screen = "app";
   await loadEarnings(); await checkActiveRide();
   render();
+}
+
+function normalizePhone(raw){
+  if(!raw) return null;
+  var digits = raw.replace(/[^0-9]/g, "");
+  if(digits.length === 10) return "+1" + digits;
+  if(digits.length === 11 && digits[0] === "1") return "+" + digits;
+  if(raw.trim().indexOf("+") === 0) return "+" + digits;
+  return digits ? "+" + digits : null;
 }
 
 var deferredInstallPrompt = null;
