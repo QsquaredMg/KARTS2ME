@@ -144,7 +144,7 @@ function screenAuth(){
       '<input id="authPassword" class="field" placeholder="Password" type="password">' +
       (state.authError ? '<div class="errbox">' + esc(state.authError) + '</div>' : "") +
       '<button id="authSubmit" class="btn btn-primary">' + (isSignup?"Sign up":"Log in") + '</button>' +
-      (isSignup ? '<p style="font-size:11px; color:var(--slate); text-align:center; margin-top:10px; line-height:1.5;">By signing up, you agree to our <a href="/privacy.html" target="_blank" style="color:var(--slate); text-decoration:underline;">Privacy Policy</a></p>' : "") +
+      (isSignup ? '<p style="font-size:11px; color:var(--slate); text-align:center; margin-top:10px; line-height:1.5;">By signing up, you agree to our <a href="/terms.html" target="_blank" style="color:var(--slate); text-decoration:underline;">Terms of Service</a> and <a href="/privacy.html" target="_blank" style="color:var(--slate); text-decoration:underline;">Privacy Policy</a></p>' : "") +
       (!isSignup ? '<button id="forgotPasswordLink" style="background:none; border:none; margin-top:12px; font-size:12px; color:var(--slate); text-decoration:underline; display:block; width:100%; text-align:center;">Forgot password?</button>' : "") +
       '<button id="authToggle" style="background:none; border:none; margin-top:12px; font-size:12px; color:var(--slate); text-decoration:underline; display:block; width:100%; text-align:center;">' +
         (isSignup ? "Already have an account? Log in" : "New operator? Create account") + '</button>' +
