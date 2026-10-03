@@ -114,6 +114,10 @@ var state = {
   seats: 1,
   buyout: false,
   currentRideId: null,
+  zoneBiddingEnabled: false,
+  rideBids: [],
+  bidsPoll: null,
+  assignedDriver: null,
   people: [
     { name:"You", status:"paid_confirmed" },
     { name:"Maria", status:"paid_confirmed" },
@@ -230,6 +234,8 @@ async function loadZoneData(){
   }
   var priceRes = await sb.from("operator_pricing").select("*").eq("operator_id", state.operatorId).maybeSingle();
   state.pricing = priceRes.data;
+  var zoneRes = await sb.from("zones").select("driver_bidding_enabled").eq("id", state.zoneId).maybeSingle();
+  state.zoneBiddingEnabled = !!(zoneRes.data && zoneRes.data.driver_bidding_enabled);
 }
 
 function fareTotal(){
@@ -659,7 +665,7 @@ async function createRide(){
     dropoff_lat: state.destCoords ? state.destCoords[0] : null,
     dropoff_lng: state.destCoords ? state.destCoords[1] : null,
     seats_requested: state.seats, is_buyout: state.buyout,
-    fare_cents: Math.round(t*100), status: "requested",
+    fare_cents: Math.round(t*100), status: state.zoneBiddingEnabled ? "matching" : "requested",
   };
   var res = await sb.from("rides").insert(row).select().single();
   if(res.error) throw new Error(res.error.message);
@@ -739,7 +745,11 @@ async function confirmPaymentClick(){
 
 function screenMatching(){
   createRide().then(function(){
-    setTimeout(function(){ go("active"); }, 1600);
+    if(state.zoneBiddingEnabled){
+      go("bids");
+    } else {
+      setTimeout(function(){ go("active"); }, 1600);
+    }
   }).catch(function(e){
     alert("Couldn't start your ride: " + (e.message || "Please try again."));
     go("confirm");
@@ -754,16 +764,128 @@ function screenMatching(){
   );
 }
 
+function screenBids(){
+  setTimeout(startBidsPolling, 0);
+  var rows = state.rideBids.length ? state.rideBids.map(function(b){
+    return (
+      '<div class="card" style="padding:16px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">' +
+        '<div><p style="font-size:14px; font-weight:700; color:var(--ink);">' + esc(b.driverName || "Driver") + '</p>' +
+        '<p style="font-size:12px; color:var(--slate); margin-top:2px;">&#9733; ' + (b.driverRating!=null ? Number(b.driverRating).toFixed(1) : "5.0") + '</p></div>' +
+        '<div style="text-align:right;">' +
+          '<p class="mono" style="font-size:16px; font-weight:700; color:var(--ink); margin-bottom:6px;">$' + (b.fare_cents/100).toFixed(2) + '</p>' +
+          '<button class="btn-primary choose-bid-btn" data-id="' + b.id + '" style="padding:8px 14px; font-size:13px;">Choose</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join("") : '<p style="font-size:13px; color:var(--slate); text-align:center; padding:30px 10px;">Waiting for drivers to submit a rate&hellip;</p>';
+  return (
+    '<div style="height:100%; display:flex; flex-direction:column;">' +
+      '<div style="padding:28px 20px 0;">' +
+        '<p class="display" style="font-size:18px; font-weight:600;">Choose your driver</p>' +
+        '<p style="font-size:13px; color:var(--slate); margin-top:4px;">Lowest rate first &mdash; drivers are still bidding on your ride.</p>' +
+      '</div>' +
+      '<div style="flex:1; overflow-y:auto; padding:16px 20px;">' + rows + '</div>' +
+      '<div style="padding:12px 20px 28px;"><button id="cancelBidding" class="btn-ghost">Cancel request</button></div>' +
+    '</div>'
+  );
+}
+
+async function loadRideBids(){
+  if(!state.currentRideId) return;
+  var res = await sb.from("ride_bids")
+    .select("id,fare_cents,drivers(rating,profiles(full_name))")
+    .eq("ride_id", state.currentRideId)
+    .eq("status", "open")
+    .order("fare_cents", { ascending: true });
+  if(res.error){ console.error("loadRideBids", res.error); return; }
+  state.rideBids = (res.data || []).map(function(b){
+    return {
+      id: b.id, fare_cents: b.fare_cents,
+      driverName: b.drivers && b.drivers.profiles ? b.drivers.profiles.full_name : null,
+      driverRating: b.drivers ? b.drivers.rating : null,
+    };
+  });
+}
+
+async function checkRideAssigned(){
+  if(!state.currentRideId) return false;
+  var res = await sb.from("rides").select("status,driver_id").eq("id", state.currentRideId).maybeSingle();
+  if(res.error || !res.data) return false;
+  if(res.data.status === "assigned" || res.data.status === "in_progress"){
+    if(res.data.driver_id){
+      var dRes = await sb.from("drivers").select("rating,profiles(full_name)").eq("id", res.data.driver_id).maybeSingle();
+      if(dRes.data){
+        state.assignedDriver = {
+          name: (dRes.data.profiles && dRes.data.profiles.full_name) || "Your driver",
+          rating: dRes.data.rating,
+        };
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+function stopBidsPolling(){
+  if(state.bidsPoll){ clearInterval(state.bidsPoll); state.bidsPoll = null; }
+}
+
+function startBidsPolling(){
+  if(state.bidsPoll) return;
+  loadRideBids();
+  state.bidsPoll = setInterval(async function(){
+    var assigned = await checkRideAssigned();
+    if(assigned){
+      stopBidsPolling();
+      go("active");
+      return;
+    }
+    await loadRideBids();
+    if(state.screen === "bids") render();
+  }, 3000);
+}
+
+async function chooseBid(bidId){
+  var res = await sb.rpc("accept_ride_bid", { p_bid_id: bidId });
+  if(res.error){
+    alert("Couldn't select that driver: " + res.error.message);
+    return;
+  }
+  if(res.data !== 1){
+    alert("That rate is no longer available — pick another driver.");
+    await loadRideBids();
+    render();
+    return;
+  }
+  stopBidsPolling();
+  await checkRideAssigned();
+  go("active");
+}
+
+async function cancelBidRide(){
+  stopBidsPolling();
+  if(state.currentRideId){
+    await sb.from("rides").update({ status:"cancelled" }).eq("id", state.currentRideId);
+  }
+  state.currentRideId = null;
+  state.rideBids = [];
+  go("home");
+}
+
 function screenActive(){
+  var driverName = state.assignedDriver ? state.assignedDriver.name : DRIVER.name;
+  var driverRating = state.assignedDriver ? state.assignedDriver.rating : DRIVER.rating;
+  var driverVehicle = state.assignedDriver ? "On the way" : DRIVER.vehicle;
+  var driverInitials = state.assignedDriver ? (driverName||"?").split(" ").map(function(p){ return p[0]; }).slice(0,2).join("").toUpperCase() : DRIVER.photo;
   return (
     '<div style="height:100%; display:flex; flex-direction:column;">' +
       '<div style="flex:1; position:relative;"><div id="activeMap" style="width:100%; height:100%;"></div>' +
         '<div style="position:absolute; top:48px; left:20px;"><span class="badge b-gold">ETA ' + (state.routeEtaMinutes || state.eta) + ' min</span></div></div>' +
       '<div style="background:#fff; border-radius:24px 24px 0 0; margin-top:-24px; position:relative; z-index:1; padding:20px;">' +
         '<div style="display:flex; align-items:center; gap:10px; margin-bottom:18px;">' +
-          '<div style="width:48px; height:48px; border-radius:99px; background:var(--ink); color:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700;">' + DRIVER.photo + '</div>' +
-          '<div style="flex:1;"><p style="font-size:14px; font-weight:700; color:var(--ink);">' + DRIVER.name + '</p><p style="font-size:12px; color:var(--slate);">' + DRIVER.vehicle + '</p></div>' +
-          '<span style="font-size:13px; font-weight:700; color:var(--orange);">&#9733; ' + DRIVER.rating + '</span>' +
+          '<div style="width:48px; height:48px; border-radius:99px; background:var(--ink); color:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700;">' + esc(driverInitials) + '</div>' +
+          '<div style="flex:1;"><p style="font-size:14px; font-weight:700; color:var(--ink);">' + esc(driverName) + '</p><p style="font-size:12px; color:var(--slate);">' + esc(driverVehicle) + '</p></div>' +
+          '<span style="font-size:13px; font-weight:700; color:var(--orange);">&#9733; ' + (driverRating!=null ? Number(driverRating).toFixed(1) : "5.0") + '</span>' +
         '</div>' +
         '<div style="background:var(--bg-light); border-radius:14px; padding:14px 16px; display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">' +
           '<div><p style="font-size:11px; color:var(--slate); margin-bottom:2px;">Pickup Location</p><p style="font-size:13px; font-weight:700; color:var(--ink);">Current location</p></div>' +
@@ -812,7 +934,7 @@ function screenLoading(){
 
 function render(){
   var map = { loading:screenLoading, auth:screenAuth, forgotPassword:screenForgotPassword, resetPassword:screenResetPassword, terms:screenTerms, chooseLocation:screenChooseLocation, home:screenHome, search:screenSearch, mode:screenMode, confirm:screenConfirm,
-    split:screenSplit, payment:screenPayment, matching:screenMatching, active:screenActive, post:screenPost, history:screenHistory };
+    split:screenSplit, payment:screenPayment, matching:screenMatching, bids:screenBids, active:screenActive, post:screenPost, history:screenHistory };
   document.getElementById("screen").innerHTML = map[state.screen]();
   bind();
   if(state.screen==="home") setTimeout(function(){ mountMap("homeMap"); }, 0);
@@ -978,6 +1100,13 @@ function bind(){
     var backBtn2 = document.getElementById("backConfirm2");
     if(backBtn2) backBtn2.onclick = function(){ go("confirm"); };
   }
+  if(s==="bids"){
+    document.querySelectorAll(".choose-bid-btn").forEach(function(btn){
+      btn.onclick = function(){ chooseBid(btn.dataset.id); };
+    });
+    var cancelBtn = document.getElementById("cancelBidding");
+    if(cancelBtn) cancelBtn.onclick = cancelBidRide;
+  }
   if(s==="active"){
     document.getElementById("simArrival").onclick = async function(){
       if(state.currentRideId){
@@ -993,7 +1122,7 @@ function bind(){
     } else {
       document.querySelectorAll(".tip-btn").forEach(function(btn){ btn.onclick = function(){ state.tip = Number(btn.dataset.n); render(); }; });
       document.getElementById("finishRide").onclick = function(){
-        state.screen="home"; state.dest=null; state.destCoords=null; state.routeEtaMinutes=null; state.routeDistanceMiles=null; state.seats=1; state.buyout=false; state.rating=0; state.showTip=false; state.tip=null; state.currentRideId=null;
+        state.screen="home"; state.dest=null; state.destCoords=null; state.routeEtaMinutes=null; state.routeDistanceMiles=null; state.seats=1; state.buyout=false; state.rating=0; state.showTip=false; state.tip=null; state.currentRideId=null; state.assignedDriver=null; state.rideBids=[];
         state.people = [ { name:"You", status:"paid_confirmed" }, { name:"Maria", status:"paid_confirmed" }, { name:"Jake", status:"paid_unconfirmed" } ];
         render();
       };

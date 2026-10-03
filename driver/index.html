@@ -88,6 +88,7 @@ var state = {
   authMode: "login", authError: null, termsAgreed: false,
   approvals: [], applyCategory: "golf_cart", applyError: null,
   openRides: [], activeRide: null,
+  matchingRides: [], myBids: {},
   earningsTotal: 0, earningsCount: 0,
   pollTimer: null,
 };
@@ -394,10 +395,28 @@ function screenRides(){
       '</div>'
     );
   }).join("");
+  var bidRows = state.matchingRides.map(function(r){
+    var myBid = state.myBids[r.id];
+    return (
+      '<div class="card" style="padding:16px; margin-bottom:10px;">' +
+        '<div style="display:flex; justify-content:space-between; align-items:flex-start;">' +
+          '<div><p style="font-size:14px; font-weight:600;">To '+esc(r.dropoff_label||"—")+'</p>' +
+          '<p style="font-size:12px; color:var(--slate); margin-top:2px;">'+r.seats_requested+' seat(s) &middot; '+(r.is_buyout?"Buyout":"Shared")+'</p></div>' +
+        '</div>' +
+        '<div style="display:flex; gap:8px; margin-top:12px; align-items:center;">' +
+          '<input type="number" min="0.01" step="0.01" class="bid-input" id="bid-input-'+r.id+'" placeholder="Your rate" value="'+(myBid!=null ? (myBid/100).toFixed(2) : "")+'" style="flex:1; padding:10px; border-radius:10px; border:1px solid #ddd; font-family:\'IBM Plex Mono\',monospace; font-size:14px;">' +
+          '<button class="btn-primary submit-bid-btn" data-id="'+r.id+'" style="padding:10px 14px; white-space:nowrap;">'+(myBid!=null ? "Update rate" : "Submit rate")+'</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join("");
   return (
     '<div class="topbar"><p class="display" style="font-weight:600; font-size:18px;">Open rides</p><button id="refreshRides" style="background:none; border:none; font-size:12px; color:var(--slate); text-decoration:underline;">Refresh</button></div>' +
     '<div style="padding:0 20px;">' +
       (state.openRides.length ? rows : '<p style="font-size:13px; color:var(--slate); text-align:center; padding:30px 10px;">No open ride requests right now.</p>') +
+      (state.matchingRides.length ?
+        '<p style="font-size:13px; font-weight:600; color:var(--slate); margin:18px 0 8px;">Name your rate</p>' + bidRows
+        : "") +
     '</div>'
   );
 }
@@ -468,6 +487,14 @@ async function loadOpenRides(){
   state.openRides = res.data || [];
 }
 
+async function loadMatchingRides(){
+  var res = await sb.from("rides").select("*, events(driver_access_mode, event_boundary)").is("driver_id", null).eq("status", "matching").order("requested_at", { ascending:true });
+  state.matchingRides = res.data || [];
+  var bidsRes = await sb.from("ride_bids").select("ride_id,fare_cents").eq("driver_id", state.session.user.id).eq("status", "open");
+  state.myBids = {};
+  (bidsRes.data || []).forEach(function(b){ state.myBids[b.ride_id] = b.fare_cents; });
+}
+
 async function loadEarnings(){
   var res = await sb.from("rides").select("fare_cents").eq("driver_id", state.session.user.id).eq("status", "completed");
   var rows = res.data || [];
@@ -500,7 +527,7 @@ function renderBottomNav(){
 async function refreshTabData(){
   await checkActiveRide();
   if(state.activeRide){ return; }
-  if(state.tab==="rides") await loadOpenRides();
+  if(state.tab==="rides"){ await loadOpenRides(); await loadMatchingRides(); }
   if(state.tab==="earnings") await loadEarnings();
   if(state.tab==="home") await loadEarnings();
 }
@@ -721,8 +748,23 @@ function bindEarnings(){
   };
 }
 
+async function submitBid(rideId){
+  var input = document.getElementById("bid-input-" + rideId);
+  var dollars = parseFloat(input.value);
+  if(!dollars || dollars <= 0){ alert("Enter a rate greater than $0."); return; }
+  var res = await sb.from("ride_bids").upsert({
+    ride_id: rideId, driver_id: state.session.user.id, fare_cents: Math.round(dollars * 100), status: "open",
+  }, { onConflict: "ride_id,driver_id" });
+  if(res.error){ alert("Couldn't submit your rate: " + res.error.message); return; }
+  await loadMatchingRides();
+  render();
+}
+
 function bindRides(){
-  document.getElementById("refreshRides").onclick = async function(){ await loadOpenRides(); render(); };
+  document.getElementById("refreshRides").onclick = async function(){ await loadOpenRides(); await loadMatchingRides(); render(); };
+  document.querySelectorAll(".submit-bid-btn").forEach(function(btn){
+    btn.onclick = function(){ submitBid(btn.dataset.id); };
+  });
   document.querySelectorAll(".accept-btn").forEach(function(btn){
     btn.onclick = async function(){
       var ride = state.openRides.find(function(r){ return r.id === btn.dataset.id; });
