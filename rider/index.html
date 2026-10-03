@@ -662,14 +662,13 @@ async function createRide(){
     fare_cents: Math.round(t*100), status: "requested",
   };
   var res = await sb.from("rides").insert(row).select().single();
-  if(res.data){
-    state.currentRideId = res.data.id;
-    fetch(SUPABASE_URL + "/functions/v1/notify-new-ride-request", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.session.access_token, "apikey": SUPABASE_ANON_KEY },
-      body: JSON.stringify({ ride_id: res.data.id }),
-    }).catch(function(){ /* notification failure shouldn't block the ride */ });
-  }
+  if(res.error) throw new Error(res.error.message);
+  state.currentRideId = res.data.id;
+  fetch(SUPABASE_URL + "/functions/v1/notify-new-ride-request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.session.access_token, "apikey": SUPABASE_ANON_KEY },
+    body: JSON.stringify({ ride_id: res.data.id }),
+  }).catch(function(){ /* notification failure shouldn't block the ride */ });
 }
 
 async function createPaymentIntentForRide(rideId){
@@ -741,6 +740,9 @@ async function confirmPaymentClick(){
 function screenMatching(){
   createRide().then(function(){
     setTimeout(function(){ go("active"); }, 1600);
+  }).catch(function(e){
+    alert("Couldn't start your ride: " + (e.message || "Please try again."));
+    go("confirm");
   });
   return (
     '<div style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 32px; text-align:center;">' +
