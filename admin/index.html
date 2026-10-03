@@ -181,7 +181,7 @@ async function loadAdminData(){
   state.refundQueue = rfRes.data || [];
 }
 
-function sectionHead(title, desc){ return '<div class="section-head"><div><h2 class="display">' + title + '</h2><p>' + desc + '</p></div></div>'; }
+function sectionHead(title, desc, actionHtml){ return '<div class="section-head"><div><h2 class="display">' + title + '</h2><p>' + desc + '</p></div>' + (actionHtml||"") + '</div>'; }
 var NAV = [["overview","Overview"],["operators","Operators"],["approvals","Driver Approvals"],["refunds","Refunds"],["requirements","Category Requirements"],["support","Support"]];
 
 function renderShell(){
@@ -234,8 +234,81 @@ function renderOperators(){
       '<td><span class="badge ' + (o.status==="active"?"b-turf":"b-coral") + '">' + (o.status==="active"?"Active":"Pending review") + '</span></td></tr>'
     );
   }).join("");
-  return sectionHead("Operators", "Every operator row, live from the database.") +
+  return sectionHead("Operators", "Every operator row, live from the database.",
+      '<button class="btn btn-primary" id="btnNewOperator" style="width:auto;">+ New operator</button>') +
     '<div class="panel" style="overflow-x:auto;"><table><thead><tr><th>Operator</th><th>Type</th><th>Platform fee</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+var OPERATOR_TYPES = [
+  ["resort","Resort"], ["campus","Campus"], ["stadium_venue","Stadium / venue"],
+  ["hoa","HOA / community"], ["municipality","Municipality"], ["event_producer","Event producer"], ["other","Other"],
+];
+
+function openNewOperatorModal(){
+  document.getElementById("modal").innerHTML = (
+    '<div class="modal-head"><h3 class="display">New operator</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
+    '<div class="modal-body">' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Legal business name</span>' +
+        '<input class="field" id="noLegalName" placeholder="e.g. Mob City Rides LLC"></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Display name</span>' +
+        '<input class="field" id="noDisplayName" placeholder="e.g. Mob City Rides"></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Type</span><select class="field" id="noType">' +
+        OPERATOR_TYPES.map(function(t){ return '<option value="'+t[0]+'">'+t[1]+'</option>'; }).join("") +
+      '</select></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">What riders see zones called (optional)</span>' +
+        '<input class="field" id="noZoneDisplayName" placeholder="e.g. Downtown Mobile"></label>' +
+      '<label style="display:block; margin-bottom:18px;"><span class="field-label">Platform fee (%)</span>' +
+        '<input type="number" class="field" id="noFee" value="22" style="width:120px;"></label>' +
+      '<div style="border-top:1px solid var(--line); padding-top:16px; margin-bottom:6px;">' +
+        '<p style="font-size:13px; font-weight:600; color:#fff; margin-bottom:10px;">Starter zone (optional — can add more later from the operator dashboard)</p>' +
+        '<label style="display:block; margin-bottom:14px;"><span class="field-label">Zone name</span>' +
+          '<input class="field" id="noZoneName" placeholder="e.g. Downtown Mobile Loop"></label>' +
+      '</div>' +
+      '<div style="display:flex; justify-content:flex-end; gap:10px;"><button class="btn btn-ghost" id="noCancel">Cancel</button>' +
+      '<button class="btn btn-primary" style="width:auto;" id="noCreate">Create operator</button></div>' +
+    '</div>'
+  );
+  document.getElementById("modalBackdrop").classList.remove("hidden");
+  document.getElementById("modalCloseBtn").onclick = closeModal;
+  document.getElementById("noCancel").onclick = closeModal;
+  document.getElementById("noCreate").onclick = async function(){
+    var legalName = document.getElementById("noLegalName").value.trim();
+    var displayName = document.getElementById("noDisplayName").value.trim();
+    if(!legalName || !displayName){ alert("Legal name and display name are required."); return; }
+    var btn = document.getElementById("noCreate");
+    btn.disabled = true; btn.textContent = "Creating…";
+
+    var opRes = await sb.from("operators").insert({
+      legal_name: legalName,
+      display_name: displayName,
+      type: document.getElementById("noType").value,
+      zone_display_name: document.getElementById("noZoneDisplayName").value.trim() || null,
+      platform_fee_percent: Number(document.getElementById("noFee").value) || 22,
+      verified: true,
+      status: "active",
+    }).select().single();
+
+    if(opRes.error){
+      alert("Couldn't create operator: " + opRes.error.message);
+      btn.disabled = false; btn.textContent = "Create operator";
+      return;
+    }
+    var operatorId = opRes.data.id;
+
+    await sb.from("operator_pricing").insert({ operator_id: operatorId });
+
+    var zoneName = document.getElementById("noZoneName").value.trim();
+    if(zoneName){
+      await sb.from("zones").insert({
+        operator_id: operatorId, name: zoneName, road_type: "mixed",
+        speed_limit_mph: 15, enabled_modes: ["on_demand"], active: true,
+      });
+    }
+
+    closeModal();
+    await loadAdminData();
+    render();
+  };
 }
 
 function openOperatorModal(id){
@@ -248,7 +321,13 @@ function openOperatorModal(id){
       '<p class="field-label">Type</p><p style="margin-bottom:16px;">' + esc(o.type) + '</p>' +
       '<label style="display:block; margin-bottom:20px;"><span class="field-label">Platform fee override (%)</span>' +
         '<input type="number" class="field" id="feeOverride" value="' + o.platform_fee_percent + '" style="width:120px;"></label>' +
-      '<div style="display:flex; justify-content:flex-end; gap:10px;"><button class="btn btn-danger" id="feeSave">Save fee</button>' + verifyBtn + '</div>' +
+      '<div style="display:flex; justify-content:flex-end; gap:10px; margin-bottom:24px;"><button class="btn btn-danger" id="feeSave">Save fee</button>' + verifyBtn + '</div>' +
+      '<div style="border-top:1px solid var(--line); padding-top:16px;">' +
+        '<p class="field-label" style="margin-bottom:8px;">Assign an owner</p>' +
+        '<p style="font-size:12px; color:var(--slate); margin-bottom:10px; line-height:1.5;">The business signs up for an account in the operator app first (at operator.karts2me.com), then enter that email here to link it to ' + esc(o.display_name) + '’s dashboard.</p>' +
+        '<div style="display:flex; gap:8px;"><input class="field" id="assignEmail" placeholder="owner@example.com" style="margin-bottom:0;"><button class="btn btn-primary" id="assignBtn" style="width:auto; white-space:nowrap;">Assign</button></div>' +
+        '<p id="assignMsg" style="font-size:12px; margin-top:8px;"></p>' +
+      '</div>' +
     '</div>'
   );
   document.getElementById("modalBackdrop").classList.remove("hidden");
@@ -261,6 +340,21 @@ function openOperatorModal(id){
   if(vb) vb.onclick = async function(){
     await sb.from("operators").update({ verified:true, status:"active" }).eq("id", o.id);
     closeModal(); await loadAdminData(); render();
+  };
+  document.getElementById("assignBtn").onclick = async function(){
+    var email = document.getElementById("assignEmail").value.trim();
+    var msg = document.getElementById("assignMsg");
+    if(!email){ msg.style.color = "var(--coral)"; msg.textContent = "Enter an email first."; return; }
+    var btn = document.getElementById("assignBtn");
+    btn.disabled = true; btn.textContent = "Assigning…";
+    var res = await sb.rpc("admin_assign_operator", { p_email: email, p_operator_id: o.id });
+    btn.disabled = false; btn.textContent = "Assign";
+    if(res.error){ msg.style.color = "var(--coral)"; msg.textContent = "Error: " + res.error.message; return; }
+    var code = res.data;
+    if(code === 1){ msg.style.color = "#6FCB8C"; msg.textContent = "Done — that account now manages " + esc(o.display_name) + "."; document.getElementById("assignEmail").value = ""; }
+    else if(code === -2){ msg.style.color = "var(--coral)"; msg.textContent = "No account with that email yet — they need to sign up at operator.karts2me.com first."; }
+    else if(code === -1){ msg.style.color = "var(--coral)"; msg.textContent = "Not authorized."; }
+    else { msg.style.color = "var(--coral)"; msg.textContent = "Couldn't assign (code " + code + ")."; }
   };
 }
 
@@ -417,6 +511,8 @@ function bindResetPassword(){
 function bindTab(){
   if(state.tab==="operators"){
     document.querySelectorAll("tr[data-op]").forEach(function(row){ row.onclick = function(){ openOperatorModal(row.dataset.op); }; });
+    var newOpBtn = document.getElementById("btnNewOperator");
+    if(newOpBtn) newOpBtn.onclick = openNewOperatorModal;
   }
   if(state.tab==="approvals"){
     document.querySelectorAll(".doc-view-btn").forEach(function(btn){
