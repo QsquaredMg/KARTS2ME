@@ -168,16 +168,29 @@ async function enablePushNotifications(){
 }
 
 async function loadAvailableLocations(){
-  var zonesRes = await sb.from("zones").select("id,operator_id,name,active,operators(display_name,zone_display_name)").eq("active", true);
+  var zonesRes = await sb.from("zones").select("id,operator_id,name,active,boundary,operators(display_name,zone_display_name)").eq("active", true);
   var eventsRes = await sb.from("events").select("id,operator_id,zone_id,name,rider_access_mode,status,ends_at,operators(display_name)").eq("rider_access_mode", "open");
+  var poiRes = await sb.from("points_of_interest").select("zone_id,lat,lng");
+  var centers = {};
+  (zonesRes.data || []).forEach(function(z){
+    var pts = Array.isArray(z.boundary) ? z.boundary.filter(function(p){ return Array.isArray(p) && p.length>=2; }) : [];
+    if(pts.length){ centers[z.id] = [pts.reduce(function(a,p){return a+p[0];},0)/pts.length, pts.reduce(function(a,p){return a+p[1];},0)/pts.length]; }
+  });
+  var acc = {};
+  (poiRes.data || []).forEach(function(p){ (acc[p.zone_id] = acc[p.zone_id] || []).push(p); });
+  Object.keys(acc).forEach(function(zid){
+    if(centers[zid]) return;
+    var a = acc[zid]; centers[zid] = [a.reduce(function(x,p){return x+p.lat;},0)/a.length, a.reduce(function(x,p){return x+p.lng;},0)/a.length];
+  });
+  state.zoneCenters = centers;
   var zones = (zonesRes.data || []).map(function(z){
-    return { kind:"zone", id:z.id, operatorId:z.operator_id, name:z.name, operatorName: z.operators ? (z.operators.zone_display_name || z.operators.display_name) : "Karts2Me" };
+    return { kind:"zone", id:z.id, operatorId:z.operator_id, name:z.name, center:centers[z.id] || null, operatorName: z.operators ? (z.operators.zone_display_name || z.operators.display_name) : "Karts2Me" };
   });
   var now = new Date();
   var events = (eventsRes.data || []).filter(function(e){
     return e.status !== "cancelled" && e.status !== "completed" && (!e.ends_at || new Date(e.ends_at) > now);
   }).map(function(e){
-    return { kind:"event", id:e.zone_id, eventId:e.id, operatorId:e.operator_id, name:e.name, operatorName: e.operators ? e.operators.display_name : "Karts2Me" };
+    return { kind:"event", id:e.zone_id, eventId:e.id, operatorId:e.operator_id, name:e.name, center:centers[e.zone_id] || null, operatorName: e.operators ? e.operators.display_name : "Karts2Me" };
   });
   state.availableLocations = events.concat(zones);
 }
@@ -341,29 +354,45 @@ function screenResetPassword(){
   );
 }
 
+function distMiles(a, b){
+  var R=3958.8, rad=Math.PI/180, dLat=(b[0]-a[0])*rad, dLng=(b[1]-a[1])*rad;
+  var h=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(a[0]*rad)*Math.cos(b[0]*rad)*Math.sin(dLng/2)*Math.sin(dLng/2);
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+function locListHtml(){
+  var q = (state.locQuery || "").trim().toLowerCase();
+  var rows = state.availableLocations.map(function(l, i){
+    return { l:l, i:i, d: (state.locOrigin && l.center) ? distMiles(state.locOrigin, l.center) : null };
+  });
+  if(q && !state.locOrigin){
+    var m = rows.filter(function(r){ return (r.l.name + " " + r.l.operatorName).toLowerCase().indexOf(q) >= 0; });
+    if(m.length) rows = m;
+  }
+  if(state.locOrigin){
+    rows.sort(function(a,b){ if(a.d==null && b.d==null) return 0; if(a.d==null) return 1; if(b.d==null) return -1; return a.d - b.d; });
+  }
+  if(!rows.length) return '<p style="font-size:13px; color:var(--slate); text-align:center; padding:30px 10px;">No locations are open right now. Check back soon.</p>';
+  return '<div style="display:flex; flex-direction:column; gap:8px;">' + rows.map(function(r, n){
+    var l = r.l, near = state.locOrigin && n===0 && r.d!=null;
+    var sub = esc(l.operatorName) + (l.kind==="event"?" &middot; Event":"") + (r.d!=null ? " &middot; " + (r.d<0.1 ? "right here" : r.d.toFixed(1) + " mi away") : "");
+    return '<button class="loc-btn card" data-idx="' + r.i + '" style="display:flex; align-items:center; gap:12px; padding:16px; border:' + (near?'2px solid var(--orange)':'none') + '; width:100%; text-align:left;">' +
+      '<div style="width:40px; height:40px; border-radius:99px; background:' + (l.kind==="event"?"var(--orange)":"var(--ink)") + '; color:#fff; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0;">' + (l.kind==="event"?"&#127881;":"&#128205;") + '</div>' +
+      '<div><p style="font-size:14px; font-weight:700; color:var(--ink);">' + esc(l.name) + (near?' <span style="font-size:10px; color:var(--orange); text-transform:uppercase; letter-spacing:.05em;">Nearest</span>':'') + '</p><p style="font-size:12px; color:var(--slate);">' + sub + '</p></div>' +
+    '</button>';
+  }).join("") + '</div>';
+}
 function screenChooseLocation(){
-  var locs = state.availableLocations;
   return (
     '<div style="height:100%; display:flex; flex-direction:column;">' +
-      '<div style="padding:48px 20px 16px;">' +
+      '<div style="padding:48px 20px 12px;">' +
         '<img src="/icon-512.png" style="width:48px; height:48px; margin-bottom:14px;">' +
         '<p class="display" style="font-size:20px; font-weight:600;">Where are you riding?</p>' +
-        '<p style="font-size:13px; color:var(--slate); margin-top:4px;">Choose the property or event you\'re at.</p>' +
+        '<p style="font-size:13px; color:var(--slate); margin-top:4px;">Enter an address or use your location to find the nearest zone.</p>' +
+        '<div style="display:flex; gap:8px; margin-top:12px;"><input id="locAddr" class="field" placeholder="Enter an address, city or zone name&hellip;" autocomplete="off" value="' + esc(state.locQuery || "") + '" style="margin-bottom:0;"><button id="locAddrGo" class="btn-primary" style="width:auto; padding:0 16px;">Go</button></div>' +
+        '<button id="locUseMe" style="margin-top:8px; background:none; border:none; padding:0; color:var(--orange); font-size:13px; font-weight:600; cursor:pointer;">&#9678; Use my current location</button>' +
+        '<p id="locMsg" style="font-size:12px; color:var(--slate); margin-top:6px; min-height:16px;">' + esc(state.locMsg || "") + '</p>' +
       '</div>' +
-      '<div style="flex:1; overflow-y:auto; padding:0 20px 20px;">' +
-        (locs.length===0 ?
-          '<p style="font-size:13px; color:var(--slate); text-align:center; padding:30px 10px;">No locations are open right now. Check back soon.</p>'
-          :
-          '<div style="display:flex; flex-direction:column; gap:8px;">' +
-            locs.map(function(l, i){
-              return '<button class="loc-btn card" data-idx="' + i + '" style="display:flex; align-items:center; gap:12px; padding:16px; border:none; width:100%; text-align:left;">' +
-                '<div style="width:40px; height:40px; border-radius:99px; background:' + (l.kind==="event"?"var(--orange)":"var(--ink)") + '; color:#fff; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0;">' + (l.kind==="event"?"&#127881;":"&#128205;") + '</div>' +
-                '<div><p style="font-size:14px; font-weight:700; color:var(--ink);">' + esc(l.name) + '</p><p style="font-size:12px; color:var(--slate);">' + esc(l.operatorName) + (l.kind==="event"?" &middot; Event":"") + '</p></div>' +
-              '</button>';
-            }).join("") +
-          '</div>'
-        ) +
-      '</div>' +
+      '<div id="locList" style="flex:1; overflow-y:auto; padding:0 20px 20px;">' + locListHtml() + '</div>' +
     '</div>'
   );
 }
@@ -414,7 +443,13 @@ function addMyLocation(m, opts){
     first = false;
   }
   m.on("locationfound", found);
-  m.on("locationerror", function(){ if(btn) btn.title = "Location unavailable \u2014 allow location access in your browser"; });
+  m.on("locationerror", function(e){ note(e && e.code===1 ? "Location is blocked. Allow location access for this site in your browser settings, then tap again." : "Couldn't get your location. Check GPS/signal and tap again."); });
+  function note(msg){
+    var c = m.getContainer(), n = c.querySelector(".k2-locnote");
+    if(!n){ n = document.createElement("div"); n.className = "k2-locnote"; n.style.cssText = "position:absolute;left:8px;right:56px;bottom:8px;z-index:1000;background:rgba(14,26,43,.92);color:#fff;font-size:12px;line-height:1.35;padding:8px 10px;border-radius:8px;pointer-events:none;"; c.appendChild(n); }
+    n.textContent = msg; n.style.display = "block"; clearTimeout(n._t); n._t = setTimeout(function(){ n.style.display = "none"; }, 5000);
+  }
+  function start(){ try{ m.stopLocate(); }catch(e){} m.locate({ setView:false, enableHighAccuracy:true, maximumAge:10000, timeout:15000, watch:true }); }
   var btn = null;
   var Ctl = L.Control.extend({ options:{ position:"bottomright" }, onAdd:function(){
     var b = L.DomUtil.create("a", "leaflet-bar");
@@ -422,11 +457,16 @@ function addMyLocation(m, opts){
     b.style.cssText = "display:block;width:36px;height:36px;line-height:36px;text-align:center;background:#fff;color:#2f80ed;font-size:20px;cursor:pointer;text-decoration:none;border-radius:8px;box-shadow:0 1px 5px rgba(0,0,0,.4);";
     b.innerHTML = "&#9678;"; btn = b;
     L.DomEvent.disableClickPropagation(b);
-    L.DomEvent.on(b, "click", function(ev){ L.DomEvent.preventDefault(ev); first = true; opts.autoCenter = true; m.locate({ setView:false, enableHighAccuracy:true, maximumAge:10000, timeout:15000, watch:true }); });
+    L.DomEvent.on(b, "click", function(ev){
+      L.DomEvent.preventDefault(ev);
+      if(dot){ m.setView(dot.getLatLng(), Math.max(m.getZoom(), 16)); dot.openPopup(); return; }
+      if(!("geolocation" in navigator)){ note("This browser can't share location."); return; }
+      note("Finding you\u2026"); first = true; opts.autoCenter = true; start();
+    });
     return b;
   }});
   new Ctl().addTo(m);
-  if(opts.auto){ opts.autoCenter = opts.autoCenter !== false; m.locate({ setView:false, enableHighAccuracy:true, maximumAge:10000, timeout:15000, watch:true }); }
+  if(opts.auto){ opts.autoCenter = opts.autoCenter !== false; start(); }
   return m;
 }
 
@@ -1169,18 +1209,51 @@ function bind(){
     };
   }
   if(s==="chooseLocation"){
-    document.querySelectorAll(".loc-btn").forEach(function(btn){
-      btn.onclick = async function(){
-        var l = state.availableLocations[Number(btn.dataset.idx)];
-        state.zoneId = l.id;
-        state.operatorId = l.operatorId;
-        state.eventId = l.kind === "event" ? l.eventId : null;
-        state.zoneName = l.name;
-        state.operatorName = l.operatorName;
-        await loadZoneData();
-        go("home");
-      };
-    });
+    var pickLoc = async function(btn){
+      var l = state.availableLocations[Number(btn.dataset.idx)];
+      state.zoneId = l.id;
+      state.operatorId = l.operatorId;
+      state.eventId = l.kind === "event" ? l.eventId : null;
+      state.zoneName = l.name;
+      state.operatorName = l.operatorName;
+      await loadZoneData();
+      go("home");
+    };
+    var bindLocBtns = function(){ document.querySelectorAll(".loc-btn").forEach(function(btn){ btn.onclick = function(){ pickLoc(btn); }; }); };
+    var refreshList = function(msg){
+      state.locMsg = msg || "";
+      document.getElementById("locList").innerHTML = locListHtml();
+      document.getElementById("locMsg").textContent = state.locMsg;
+      bindLocBtns();
+    };
+    var geocodeAddr = async function(){
+      var q = document.getElementById("locAddr").value.trim();
+      state.locQuery = q;
+      if(q.length < 3){ state.locOrigin = null; refreshList(""); return; }
+      document.getElementById("locMsg").textContent = "Searching\u2026";
+      try{
+        var r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(q), { headers:{ "Accept":"application/json" } });
+        var d = await r.json();
+        if(d && d[0]){
+          state.locOrigin = [parseFloat(d[0].lat), parseFloat(d[0].lon)];
+          var any = state.availableLocations.some(function(l){ return l.center; });
+          refreshList(any ? "Zones sorted by distance from " + (d[0].display_name || q).split(",").slice(0,2).join(",") : "Found the address, but these zones don't have map locations yet \u2014 pick one below.");
+        } else { state.locOrigin = null; refreshList("No address found. Try the street, city and state."); }
+      }catch(e){ state.locOrigin = null; refreshList("Couldn't search right now. Pick a zone below."); }
+    };
+    document.getElementById("locAddrGo").onclick = geocodeAddr;
+    document.getElementById("locAddr").onkeydown = function(e){ if(e.key==="Enter"){ e.preventDefault(); geocodeAddr(); } };
+    document.getElementById("locAddr").oninput = function(e){ state.locQuery = e.target.value; if(!state.locOrigin){ refreshList(""); } };
+    document.getElementById("locUseMe").onclick = async function(){
+      document.getElementById("locMsg").textContent = "Finding you\u2026";
+      var pos = await getRiderPosition();
+      if(!pos){ refreshList("Couldn't get your location. Allow location access for this site, or enter an address."); return; }
+      state.locOrigin = pos; state.locQuery = "";
+      document.getElementById("locAddr").value = "";
+      var any = state.availableLocations.some(function(l){ return l.center; });
+      refreshList(any ? "Zones sorted by distance from you" : "Zones don't have map locations yet \u2014 pick one below.");
+    };
+    bindLocBtns();
   }
   if(s==="home"){
     document.getElementById("goSearch").onclick = function(){ go("search"); };

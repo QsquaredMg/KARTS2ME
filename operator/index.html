@@ -594,6 +594,7 @@ function renderEventModal(){
     body = (
       '<p style="font-size:14px; font-weight:600; margin-bottom:4px;">Draw the property line</p>' +
       '<p style="font-size:12px; color:var(--slate); margin-bottom:12px;">Riders and drivers are geofenced to this boundary. Use the polygon tool on the map to trace it.</p>' +
+      '<div style="display:flex; gap:6px; margin-bottom:6px;"><input id="mapAddr" class="field" placeholder="Search an address to jump the map&hellip;" autocomplete="off" style="margin-bottom:0;"><button type="button" id="mapAddrBtn" class="btn-ghost" style="padding:0 16px; border-radius:10px; cursor:pointer;">Go</button></div>' +
       '<div id="boundaryMap" style="height:320px; border-radius:12px; overflow:hidden;"></div>' +
       (d.boundary && d.boundary.length>=3 ? '<p style="font-size:12px; color:var(--turf); font-weight:600; margin-top:10px;">&#10003; Boundary drawn (' + d.boundary.length + ' points)</p>' : '<p style="font-size:12px; color:var(--coral); margin-top:10px;">No boundary drawn yet — optional, but recommended for closed-fleet events.</p>')
     );
@@ -692,7 +693,13 @@ function addMyLocation(m, opts){
     first = false;
   }
   m.on("locationfound", found);
-  m.on("locationerror", function(){ if(btn) btn.title = "Location unavailable \u2014 allow location access in your browser"; });
+  m.on("locationerror", function(e){ note(e && e.code===1 ? "Location is blocked. Allow location access for this site in your browser settings, then tap again." : "Couldn't get your location. Check GPS/signal and tap again."); });
+  function note(msg){
+    var c = m.getContainer(), n = c.querySelector(".k2-locnote");
+    if(!n){ n = document.createElement("div"); n.className = "k2-locnote"; n.style.cssText = "position:absolute;left:8px;right:56px;bottom:8px;z-index:1000;background:rgba(14,26,43,.92);color:#fff;font-size:12px;line-height:1.35;padding:8px 10px;border-radius:8px;pointer-events:none;"; c.appendChild(n); }
+    n.textContent = msg; n.style.display = "block"; clearTimeout(n._t); n._t = setTimeout(function(){ n.style.display = "none"; }, 5000);
+  }
+  function start(){ try{ m.stopLocate(); }catch(e){} m.locate({ setView:false, enableHighAccuracy:true, maximumAge:10000, timeout:15000, watch:true }); }
   var btn = null;
   var Ctl = L.Control.extend({ options:{ position:"bottomright" }, onAdd:function(){
     var b = L.DomUtil.create("a", "leaflet-bar");
@@ -700,12 +707,39 @@ function addMyLocation(m, opts){
     b.style.cssText = "display:block;width:36px;height:36px;line-height:36px;text-align:center;background:#fff;color:#2f80ed;font-size:20px;cursor:pointer;text-decoration:none;border-radius:8px;box-shadow:0 1px 5px rgba(0,0,0,.4);";
     b.innerHTML = "&#9678;"; btn = b;
     L.DomEvent.disableClickPropagation(b);
-    L.DomEvent.on(b, "click", function(ev){ L.DomEvent.preventDefault(ev); first = true; opts.autoCenter = true; m.locate({ setView:false, enableHighAccuracy:true, maximumAge:10000, timeout:15000, watch:true }); });
+    L.DomEvent.on(b, "click", function(ev){
+      L.DomEvent.preventDefault(ev);
+      if(dot){ m.setView(dot.getLatLng(), Math.max(m.getZoom(), 16)); dot.openPopup(); return; }
+      if(!("geolocation" in navigator)){ note("This browser can't share location."); return; }
+      note("Finding you\u2026"); first = true; opts.autoCenter = true; start();
+    });
     return b;
   }});
   new Ctl().addTo(m);
-  if(opts.auto){ opts.autoCenter = opts.autoCenter !== false; m.locate({ setView:false, enableHighAccuracy:true, maximumAge:10000, timeout:15000, watch:true }); }
+  if(opts.auto){ opts.autoCenter = opts.autoCenter !== false; start(); }
   return m;
+}
+
+
+function bindMapAddressSearch(m){
+  var inp = document.getElementById("mapAddr"), btn = document.getElementById("mapAddrBtn");
+  if(!inp || !btn) return;
+  async function go(){
+    var q = inp.value.trim(); if(q.length < 3) return;
+    btn.textContent = "\u2026";
+    try{
+      var r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(q), { headers:{ "Accept":"application/json" } });
+      var d = await r.json();
+      if(d && d[0]){
+        var bb = d[0].boundingbox;
+        if(bb) m.fitBounds([[+bb[0], +bb[2]], [+bb[1], +bb[3]]], { maxZoom:17 }); else m.setView([+d[0].lat, +d[0].lon], 17);
+        inp.style.borderColor = "";
+      } else { inp.style.borderColor = "#E85D3F"; inp.placeholder = "No match \u2014 try a fuller address"; }
+    }catch(e){ inp.style.borderColor = "#E85D3F"; }
+    btn.textContent = "Go";
+  }
+  btn.onclick = go;
+  inp.onkeydown = function(e){ if(e.key === "Enter"){ e.preventDefault(); go(); } };
 }
 
 function mountBoundaryMap(d){
@@ -724,6 +758,7 @@ function mountBoundaryMap(d){
     d.boundary = latlngs;
     renderEventModal();
   });
+  bindMapAddressSearch(m);
   eventBoundaryMap = m;
   setTimeout(function(){ m.invalidateSize(); }, 50);
 }
