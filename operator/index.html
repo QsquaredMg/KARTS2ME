@@ -117,7 +117,7 @@ var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 var vehicleCategories = [
-  { key:"golf_cart", label:"Golf Cart" }, { key:"shuttle_van", label:"Shuttle Van" },
+  { key:"golf_cart", label:"Shuttle Cart" }, { key:"shuttle_van", label:"Shuttle Van" },
   { key:"ada_cart", label:"ADA Cart" }, { key:"utility_cart", label:"Utility Cart" },
 ];
 
@@ -373,7 +373,7 @@ function openVTModal(existing){
   openModal(
     '<div class="modal-head"><h3 class="display">' + (isEdit?"Edit vehicle type":"New vehicle type") + '</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
     '<div class="modal-body">' +
-      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Label</span><input class="field" id="vtLabel" placeholder="e.g. 6-Seat Golf Cart" value="' + (isEdit?esc(existing.label):"") + '"></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Label</span><input class="field" id="vtLabel" placeholder="e.g. 6-Seat Shuttle Cart" value="' + (isEdit?esc(existing.label):"") + '"></label>' +
       '<label style="display:block; margin-bottom:14px;"><span class="field-label">Category</span><select class="field" id="vtCategory">' +
         vehicleCategories.map(function(c){ return '<option value="' + c.key + '" ' + (isEdit && existing.category===c.key?"selected":"") + '>' + c.label + '</option>'; }).join("") + '</select></label>' +
       '<label style="display:block; margin-bottom:14px;"><span class="field-label">Capacity</span><input type="number" class="field" id="vtCapacity" value="' + (isEdit?existing.capacity:4) + '"></label>' +

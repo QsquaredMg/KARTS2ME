@@ -132,7 +132,7 @@ var state = {
   tip: null,
 };
 
-var DRIVER = { name:"Jenna Cole", rating:4.8, vehicle:"4-Seat Golf Cart · #12", photo:"JC" };
+var DRIVER = { name:"Jenna Cole", rating:4.8, vehicle:"4-Seat Shuttle Cart · #12", photo:"JC" };
 
 function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
 function go(screen){ state.screen = screen; render(); window.scrollTo(0,0); }
@@ -254,7 +254,7 @@ function fareTotal(){
 function screenAuth(){
   var isSignup = state.authMode === "signup";
   var features = [
-    { icon:"&#128205;", label:"Multiple Rides", sub:"Golf carts, cars &amp; vans" },
+    { icon:"&#128205;", label:"Multiple Rides", sub:"Shuttle carts, cars &amp; vans" },
     { icon:"&#9200;", label:"Quick Booking", sub:"Book in seconds" },
     { icon:"&#9733;", label:"Safe &amp; Reliable", sub:"Verified drivers" },
   ];
@@ -268,7 +268,7 @@ function screenAuth(){
         '<p style="font-size:13px; color:var(--slate); text-align:center; margin-bottom:22px;">Book carts and shuttles in seconds</p>'
         :
         '<p class="display" style="font-size:26px; line-height:1.15; text-align:center; margin-bottom:14px;">Your Ride,<br><span style="color:var(--orange);">On Time,</span><br>Every Time.</p>' +
-        '<p style="font-size:13px; color:var(--slate); text-align:center; line-height:1.5; margin-bottom:22px;">Book golf carts, cars or vans in seconds. Safe, reliable and always near you.</p> ' +
+        '<p style="font-size:13px; color:var(--slate); text-align:center; line-height:1.5; margin-bottom:22px;">Book shuttle carts, cars or vans in seconds. Safe, reliable and always near you.</p> ' +
         '<div style="display:flex; flex-direction:column; gap:14px; margin-bottom:26px;">' +
           features.map(function(f){
             return '<div style="display:flex; align-items:center; gap:12px;">' +
@@ -383,7 +383,7 @@ function screenTerms(){
         '</div>' +
         '<div class="card" style="padding:16px; margin-bottom:12px; border:1px solid var(--coral);">' +
           '<p style="font-size:13px; font-weight:600; margin-bottom:6px; color:var(--coral);">Warning: Assumption of Risk &amp; Liability Waiver</p>' +
-          '<p style="font-size:12px; color:var(--slate); line-height:1.5;">Riding in a golf cart or shuttle carries inherent risk. Karts2Me is a technology platform, not a transportation carrier, and is not responsible for injury, death, or property damage arising from a ride, except for Karts2Me\'s own gross negligence or willful misconduct, which can never be waived.</p>' +
+          '<p style="font-size:12px; color:var(--slate); line-height:1.5;">Riding in a shuttle cart or shuttle carries inherent risk. Karts2Me is a technology platform, not a transportation carrier, and is not responsible for injury, death, or property damage arising from a ride, except for Karts2Me\'s own gross negligence or willful misconduct, which can never be waived.</p>' +
         '</div>' +
       '</div>' +
       '<div style="padding:16px 20px 8px;">' +
@@ -639,7 +639,7 @@ function screenConfirm(){
     '<div class="topbar"><button class="backbtn" id="backMode">&lsaquo;</button><p class="display" style="font-weight:600; font-size:15px;">Confirm ride</p><div style="width:36px;"></div></div>' +
     '<div style="padding:0 20px;">' +
       '<div class="card" style="padding:16px; display:flex; align-items:center; gap:10px; margin-bottom:16px;">' +
-        '<span style="font-size:24px;">&#128663;</span><div><p style="font-size:14px; font-weight:600;">4-Seat Golf Cart</p><p style="font-size:12px; color:var(--slate);">To ' + esc(state.dest) + ' &middot; ~' + (state.routeEtaMinutes || 4) + ' min' + (state.routeDistanceMiles ? ' (' + state.routeDistanceMiles + ' mi)' : '') + '</p></div></div>' +
+        '<span style="font-size:24px;">&#128663;</span><div><p style="font-size:14px; font-weight:600;">4-Seat Shuttle Cart</p><p style="font-size:12px; color:var(--slate);">To ' + esc(state.dest) + ' &middot; ~' + (state.routeEtaMinutes || 4) + ' min' + (state.routeDistanceMiles ? ' (' + state.routeDistanceMiles + ' mi)' : '') + '</p></div></div>' +
       '<p style="font-size:11px; font-family:\'IBM Plex Mono\',monospace; text-transform:uppercase; letter-spacing:0.05em; color:var(--slate); margin-bottom:8px;">Seats needed</p>' +
       '<div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">' +
         Array.from({length:CAPACITY}).map(function(_, i){

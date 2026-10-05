@@ -1,7 +1,7 @@
 {
   "name": "Karts2Me — Mini Transit",
   "short_name": "Karts2Me",
-  "description": "Book golf carts and shuttles on demand.",
+  "description": "Book shuttle carts and shuttles on demand.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#FFFFFF",
