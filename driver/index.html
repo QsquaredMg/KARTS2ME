@@ -75,7 +75,7 @@ var SUPABASE_URL = "https://ajmtwylkhmwoistuewox.supabase.co";
 var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqbXR3eWxraG13b2lzdHVld294Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDQzNjEsImV4cCI6MjEwMzU4MDM2MX0.TbUinkDkL9t_N_4NS26OFF8zX6hSawxWufqGRm65rKk";
 var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 var TERMS_VERSION = "2026-08-29";
-var VAPID_PUBLIC_KEY = "BHAJDbP5hpBxwGmcC4L-9EE4ioBEANMtM2WD9I19R7SdaMAlA8Q0-l56Q6enKBO0pgRR_8vjJUSnuLw6UJs33jk";
+var VAPID_PUBLIC_KEY = "BDW6HOOal5L6x_Fn_qw8AfGJ5LL04E1Z2GFMz3tcJWMO4v9Z6pmJSDbkPHVLsIUlVftwqB0-5FFXllDzn9-079g";
 
 var vehicleCategories = [
   { key:"golf_cart", label:"Golf Cart" }, { key:"shuttle_van", label:"Shuttle Van" },
@@ -91,6 +91,8 @@ var state = {
   matchingRides: [], myBids: {},
   earningsTotal: 0, earningsCount: 0,
   pollTimer: null,
+  locationWatchId: null, lastLocationWriteAt: 0,
+  cancelling: false,
 };
 
 function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
@@ -440,6 +442,7 @@ function screenActive(){
       (isInProgress
         ? '<button id="completeRideBtn" class="btn-primary">Complete ride</button>'
         : '<button id="startRideBtn" class="btn-primary">Start ride</button>') +
+      '<button id="cancelActiveRideBtn" style="width:100%; background:none; border:none; font-size:13px; color:var(--coral); font-weight:600; margin-top:12px;" ' + (state.cancelling?"disabled":"") + '>' + (state.cancelling ? "Cancelling…" : "Can't make this ride") + '</button>' +
     '</div>'
   );
 }
@@ -505,6 +508,35 @@ async function loadEarnings(){
 async function checkActiveRide(){
   var res = await sb.from("rides").select("*").eq("driver_id", state.session.user.id).in("status", ["assigned","in_progress"]).order("requested_at", { ascending:false }).limit(1).maybeSingle();
   state.activeRide = res.data || null;
+  if(state.activeRide){ startLocationSharing(); } else { stopLocationSharing(); }
+}
+
+// Shares live GPS position to the drivers table while a ride is assigned/in
+// progress, so the rider app can show the driver approaching on their map.
+// Writes are throttled to roughly once every 10s to avoid hammering the DB.
+var LOCATION_WRITE_INTERVAL_MS = 10000;
+function startLocationSharing(){
+  if(state.locationWatchId != null || !("geolocation" in navigator)) return;
+  state.locationWatchId = navigator.geolocation.watchPosition(
+    function(pos){
+      var now = Date.now();
+      if(now - state.lastLocationWriteAt < LOCATION_WRITE_INTERVAL_MS) return;
+      state.lastLocationWriteAt = now;
+      sb.from("drivers").update({
+        current_lat: pos.coords.latitude,
+        current_lng: pos.coords.longitude,
+        location_updated_at: new Date().toISOString(),
+      }).eq("id", state.session.user.id).then(function(){}, function(){});
+    },
+    function(){ /* location unavailable/denied — rider map simply won't show a live dot */ },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+  );
+}
+function stopLocationSharing(){
+  if(state.locationWatchId != null){
+    navigator.geolocation.clearWatch(state.locationWatchId);
+    state.locationWatchId = null;
+  }
 }
 
 /* ---------- BOTTOM NAV ---------- */
@@ -811,6 +843,28 @@ function bindActive(){
     state.activeRide = null;
     await loadEarnings();
     render();
+  };
+  var cancelBtn = document.getElementById("cancelActiveRideBtn");
+  if(cancelBtn) cancelBtn.onclick = async function(){
+    if(!confirm("Back out of this ride? It will reopen for another driver and the rider won't be charged a fee.")) return;
+    state.cancelling = true; render();
+    try{
+      var res = await fetch(SUPABASE_URL + "/functions/v1/cancel-ride", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.session.access_token, "apikey": SUPABASE_ANON_KEY },
+        body: JSON.stringify({ ride_id: state.activeRide.id }),
+      });
+      var data = await res.json();
+      if(!res.ok) throw new Error(data.error || "Could not back out of this ride");
+      state.activeRide = null;
+      state.cancelling = false;
+      await refreshTabData();
+      render();
+    } catch(e){
+      state.cancelling = false;
+      alert("Couldn't back out: " + e.message);
+      render();
+    }
   };
 }
 

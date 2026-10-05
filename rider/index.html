@@ -82,7 +82,7 @@ var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 var STRIPE_PUBLISHABLE_KEY = "pk_live_Gvw0y1ixZXB3OeRZFm2mPStL";
 var stripeClient = Stripe(STRIPE_PUBLISHABLE_KEY);
 var elementsInstance = null;
-var VAPID_PUBLIC_KEY = "BHAJDbP5hpBxwGmcC4L-9EE4ioBEANMtM2WD9I19R7SdaMAlA8Q0-l56Q6enKBO0pgRR_8vjJUSnuLw6UJs33jk";
+var VAPID_PUBLIC_KEY = "BDW6HOOal5L6x_Fn_qw8AfGJ5LL04E1Z2GFMz3tcJWMO4v9Z6pmJSDbkPHVLsIUlVftwqB0-5FFXllDzn9-079g";
 
 var TERMS_VERSION = "2026-08-29";
 var DEFAULT_ZONE_CENTER = [39.8283, -98.5795]; // continental US fallback if a zone has no POIs yet
@@ -118,6 +118,9 @@ var state = {
   rideBids: [],
   bidsPoll: null,
   assignedDriver: null,
+  driverLocation: null,
+  driverLocationPoll: null,
+  cancelling: false,
   people: [
     { name:"You", status:"paid_confirmed" },
     { name:"Maria", status:"paid_confirmed" },
@@ -395,8 +398,10 @@ function screenTerms(){
 }
 
 var mapInstance = null;
+var driverMarker = null;
 function mountMap(elId){
   if(mapInstance){ mapInstance.remove(); mapInstance = null; }
+  driverMarker = null;
   var center = state.zoneCenter || DEFAULT_ZONE_CENTER;
   var m = L.map(elId, { zoomControl:false, attributionControl:false }).setView(center, 16);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom:19 }).addTo(m);
@@ -406,6 +411,10 @@ function mountMap(elId){
     var icon = L.divIcon({ className:'', html:'<div class="k2-pin" style="background:#3D7A4D;"></div>' });
     L.marker([p.lat, p.lng], { icon: icon }).addTo(m).bindPopup(esc(p.name));
   });
+  if(state.driverLocation){
+    var driverIcon = L.divIcon({ className:'', html:'<div class="k2-pin" style="background:var(--ink); width:18px; height:18px;">&#128663;</div>' });
+    driverMarker = L.marker([state.driverLocation.lat, state.driverLocation.lng], { icon: driverIcon }).addTo(m).bindPopup("Your driver");
+  }
   if(state.destCoords){
     var destIcon = L.divIcon({ className:'', html:'<div class="k2-pin" style="background:#E85D3F; width:16px; height:16px;"></div>' });
     L.marker(state.destCoords, { icon: destIcon }).addTo(m).bindPopup(esc(state.dest || "Destination"));
@@ -413,6 +422,37 @@ function mountMap(elId){
   }
   mapInstance = m;
   setTimeout(function(){ m.invalidateSize(); }, 50);
+}
+
+function updateDriverMarker(lat, lng){
+  state.driverLocation = { lat: lat, lng: lng };
+  if(driverMarker){
+    driverMarker.setLatLng([lat, lng]);
+  } else if(mapInstance){
+    var driverIcon = L.divIcon({ className:'', html:'<div class="k2-pin" style="background:var(--ink); width:18px; height:18px;">&#128663;</div>' });
+    driverMarker = L.marker([lat, lng], { icon: driverIcon }).addTo(mapInstance).bindPopup("Your driver");
+  }
+}
+
+function stopDriverLocationPolling(){
+  if(state.driverLocationPoll){ clearInterval(state.driverLocationPoll); state.driverLocationPoll = null; }
+}
+
+async function pollDriverLocationOnce(){
+  if(!state.currentRideId) return;
+  var res = await sb.from("rides").select("driver_id,status").eq("id", state.currentRideId).maybeSingle();
+  if(res.error || !res.data || !res.data.driver_id) return;
+  if(res.data.status !== "assigned" && res.data.status !== "in_progress"){ stopDriverLocationPolling(); return; }
+  var dRes = await sb.from("drivers").select("current_lat,current_lng,location_updated_at").eq("id", res.data.driver_id).maybeSingle();
+  if(dRes.data && dRes.data.current_lat != null && dRes.data.current_lng != null){
+    updateDriverMarker(dRes.data.current_lat, dRes.data.current_lng);
+  }
+}
+
+function startDriverLocationPolling(){
+  if(state.driverLocationPoll) return;
+  pollDriverLocationOnce();
+  state.driverLocationPoll = setInterval(pollDriverLocationOnce, 8000);
 }
 
 function screenHome(){
@@ -656,12 +696,29 @@ function screenSplit(){
   );
 }
 
+function getRiderPosition(){
+  return new Promise(function(resolve){
+    if(!("geolocation" in navigator)){ resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      function(pos){ resolve([pos.coords.latitude, pos.coords.longitude]); },
+      function(){ resolve(null); },
+      { enableHighAccuracy: true, timeout: 6000, maximumAge: 30000 }
+    );
+  });
+}
+
 async function createRide(){
   if(state.currentRideId) return;
   var t = fareTotal();
+  // Real device GPS for pickup when available — falls back to the zone center
+  // so drivers still get *a* pickup point rather than nothing at all.
+  var pickupCoords = await getRiderPosition();
+  var usedFallback = !pickupCoords;
+  if(!pickupCoords) pickupCoords = state.zoneCenter || DEFAULT_ZONE_CENTER;
   var row = {
     mode: "on_demand", zone_id: state.zoneId, event_id: state.eventId, primary_rider_id: state.session.user.id,
-    pickup_label: "Current location", dropoff_label: state.dest,
+    pickup_label: usedFallback ? "Approximate location" : "Current location", dropoff_label: state.dest,
+    pickup_lat: pickupCoords[0], pickup_lng: pickupCoords[1],
     dropoff_lat: state.destCoords ? state.destCoords[0] : null,
     dropoff_lng: state.destCoords ? state.destCoords[1] : null,
     seats_requested: state.seats, is_buyout: state.buyout,
@@ -862,14 +919,56 @@ async function chooseBid(bidId){
   go("active");
 }
 
+async function callCancelRide(rideId){
+  var res = await fetch(SUPABASE_URL + "/functions/v1/cancel-ride", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.session.access_token, "apikey": SUPABASE_ANON_KEY },
+    body: JSON.stringify({ ride_id: rideId }),
+  });
+  var data = await res.json();
+  if(!res.ok) throw new Error(data.error || "Could not cancel this ride");
+  return data;
+}
+
 async function cancelBidRide(){
+  if(!state.currentRideId){ go("home"); return; }
+  var rideId = state.currentRideId;
   stopBidsPolling();
-  if(state.currentRideId){
-    await sb.from("rides").update({ status:"cancelled" }).eq("id", state.currentRideId);
+  try{
+    await callCancelRide(rideId);
+  } catch(e){
+    alert("Couldn't cancel: " + e.message);
+    startBidsPolling();
+    return;
   }
   state.currentRideId = null;
   state.rideBids = [];
   go("home");
+}
+
+async function cancelActiveRide(){
+  if(!state.currentRideId || state.cancelling) return;
+  if(!confirm("Cancel this ride? If your driver is already on the way, a $3.00 cancellation fee may apply and the rest of your fare will be refunded.")) return;
+  state.cancelling = true;
+  try{
+    var result = await callCancelRide(state.currentRideId);
+    stopDriverLocationPolling();
+    state.currentRideId = null;
+    state.assignedDriver = null;
+    state.driverLocation = null;
+    state.cancelling = false;
+    if(result.fee_cents > 0){
+      alert("Ride cancelled. A $" + (result.fee_cents/100).toFixed(2) + " cancellation fee was applied; the remaining $" + (result.refund_cents/100).toFixed(2) + " was refunded.");
+    } else if(result.refund_cents > 0){
+      alert("Ride cancelled and fully refunded.");
+    } else {
+      alert("Ride cancelled.");
+    }
+    go("home");
+  } catch(e){
+    state.cancelling = false;
+    alert("Couldn't cancel: " + e.message);
+  }
 }
 
 function screenActive(){
@@ -896,8 +995,7 @@ function screenActive(){
           '<div><p style="font-size:11px; color:var(--slate); margin-bottom:2px;">Payment</p><p style="font-size:13px; font-weight:700; color:var(--ink);">Card on file</p></div>' +
         '</div>' +
         '<button class="btn-primary" style="margin-bottom:10px;">Contact Driver</button>' +
-        '<button id="simArrival" style="width:100%; background:none; border:none; font-size:13px; color:var(--coral); font-weight:600;">Cancel Ride</button>' +
-        '<p style="font-size:10px; color:var(--slate); text-align:center; margin-top:10px;">(dev) button above simulates arrival &mdash; no live driver app yet</p>' +
+        '<button id="cancelActiveBtn" style="width:100%; background:none; border:none; font-size:13px; color:var(--coral); font-weight:600;" ' + (state.cancelling?"disabled":"") + '>' + (state.cancelling ? "Cancelling…" : "Cancel Ride") + '</button>' +
       '</div>' +
     '</div>'
   );
@@ -908,7 +1006,7 @@ function screenPost(){
     return (
       '<div style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 32px; text-align:center;">' +
         '<p class="display" style="font-size:18px; font-weight:600; margin-bottom:4px;">Rate your ride</p>' +
-        '<p style="font-size:14px; color:var(--slate); margin-bottom:24px;">with ' + DRIVER.name + '</p>' +
+        '<p style="font-size:14px; color:var(--slate); margin-bottom:24px;">with ' + esc(state.assignedDriver ? state.assignedDriver.name : "your driver") + '</p>' +
         '<div style="display:flex; gap:8px; margin-bottom:32px;">' +
           [1,2,3,4,5].map(function(n){ return '<button class="star-btn" data-n="' + n + '" style="background:none; border:none; font-size:30px; opacity:' + (n<=state.rating?1:0.25) + ';">&#9733;</button>'; }).join("") +
         '</div>' +
@@ -939,7 +1037,11 @@ function render(){
   bind();
   if(state.screen==="home") setTimeout(function(){ mountMap("homeMap"); }, 0);
   if(state.screen==="mode") setTimeout(function(){ mountMap("modeMap"); }, 0);
-  if(state.screen==="active") setTimeout(function(){ mountMap("activeMap"); }, 0);
+  if(state.screen==="active"){
+    setTimeout(function(){ mountMap("activeMap"); startDriverLocationPolling(); }, 0);
+  } else {
+    stopDriverLocationPolling();
+  }
 }
 
 function openModal(html){ document.getElementById("modal").innerHTML = html; document.getElementById("modalBackdrop").classList.remove("hidden"); }
@@ -1108,12 +1210,15 @@ function bind(){
     if(cancelBtn) cancelBtn.onclick = cancelBidRide;
   }
   if(s==="active"){
-    document.getElementById("simArrival").onclick = async function(){
-      if(state.currentRideId){
-        await sb.from("rides").update({ status:"completed", completed_at:new Date().toISOString() }).eq("id", state.currentRideId);
+    document.getElementById("cancelActiveBtn").onclick = cancelActiveRide;
+    var __activePoll = setInterval(async function(){
+      if(state.screen !== "active" || !state.currentRideId){ clearInterval(__activePoll); return; }
+      var res = await sb.from("rides").select("status").eq("id", state.currentRideId).maybeSingle();
+      if(res.data && res.data.status === "completed"){
+        clearInterval(__activePoll);
+        go("post");
       }
-      go("post");
-    };
+    }, 4000);
   }
   if(s==="post"){
     if(!state.showTip){
@@ -1122,7 +1227,7 @@ function bind(){
     } else {
       document.querySelectorAll(".tip-btn").forEach(function(btn){ btn.onclick = function(){ state.tip = Number(btn.dataset.n); render(); }; });
       document.getElementById("finishRide").onclick = function(){
-        state.screen="home"; state.dest=null; state.destCoords=null; state.routeEtaMinutes=null; state.routeDistanceMiles=null; state.seats=1; state.buyout=false; state.rating=0; state.showTip=false; state.tip=null; state.currentRideId=null; state.assignedDriver=null; state.rideBids=[];
+        state.screen="home"; state.dest=null; state.destCoords=null; state.routeEtaMinutes=null; state.routeDistanceMiles=null; state.seats=1; state.buyout=false; state.rating=0; state.showTip=false; state.tip=null; state.currentRideId=null; state.assignedDriver=null; state.driverLocation=null; state.rideBids=[];
         state.people = [ { name:"You", status:"paid_confirmed" }, { name:"Maria", status:"paid_confirmed" }, { name:"Jake", status:"paid_unconfirmed" } ];
         render();
       };
