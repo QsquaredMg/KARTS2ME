@@ -9,6 +9,10 @@
 <link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.css">
+<script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.3/dist/leaflet-geoman.min.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root{
@@ -104,9 +108,11 @@ var SUPABASE_URL = "https://ajmtwylkhmwoistuewox.supabase.co";
 var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqbXR3eWxraG13b2lzdHVld294Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDQzNjEsImV4cCI6MjEwMzU4MDM2MX0.TbUinkDkL9t_N_4NS26OFF8zX6hSawxWufqGRm65rKk";
 var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+var PLATFORM_OPERATOR_ID = "00000000-0000-0000-0000-000000000000";
+
 var state = {
   screen: "loading", authMode: "login", authError: null, session: null, profile: null,
-  tab: "overview", operators: [], queue: [], reqs: [], tickets: [], refundQueue: [],
+  tab: "overview", operators: [], queue: [], reqs: [], tickets: [], refundQueue: [], zones: [],
 };
 
 function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
@@ -179,10 +185,13 @@ async function loadAdminData(){
 
   var rfRes = await sb.from("refund_requests").select("*, rides(dropoff_label, fare_cents, requested_at), profiles!refund_requests_requested_by_fkey(full_name)").eq("status", "pending").order("created_at", { ascending:false });
   state.refundQueue = rfRes.data || [];
+
+  var zRes = await sb.from("zones").select("*, operators(display_name)").order("created_at", { ascending:false });
+  state.zones = zRes.data || [];
 }
 
 function sectionHead(title, desc, actionHtml){ return '<div class="section-head"><div><h2 class="display">' + title + '</h2><p>' + desc + '</p></div>' + (actionHtml||"") + '</div>'; }
-var NAV = [["overview","Overview"],["operators","Operators"],["approvals","Driver Approvals"],["refunds","Refunds"],["requirements","Category Requirements"],["support","Support"]];
+var NAV = [["overview","Overview"],["operators","Operators"],["zones","Zones"],["approvals","Driver Approvals"],["refunds","Refunds"],["requirements","Category Requirements"],["support","Support"]];
 
 function renderShell(){
   var navHtml = NAV.map(function(pair){
@@ -358,6 +367,108 @@ function openOperatorModal(id){
   };
 }
 
+/* ---------- ZONES ---------- */
+
+var ZONE_ROAD_TYPES = [["cart_path","Cart path"],["shared_road","Shared road"],["mixed","Mixed"]];
+var ZONE_MODES = [["on_demand","On-demand"],["fixed_route","Fixed route"],["reserved","Reserved"]];
+
+function renderZones(){
+  var rows = state.zones.map(function(z, i){
+    var opName = z.operators ? z.operators.display_name : "—";
+    var isPlatform = z.operator_id === PLATFORM_OPERATOR_ID;
+    return (
+      '<tr><td style="color:#fff; font-weight:500;">' + esc(z.name) + '</td>' +
+      '<td>' + (isPlatform ? '<span class="badge b-gold">Karts2Me Platform</span>' : '<span style="color:var(--slate);">' + esc(opName) + '</span>') + '</td>' +
+      '<td style="color:var(--slate); text-transform:capitalize;">' + (z.road_type||"").replace("_"," ") + '</td>' +
+      '<td>' + (z.boundary && z.boundary.length>=3 ? '<span class="badge b-turf">Drawn (' + z.boundary.length + ' pts)</span>' : '<span class="badge b-slate">Not drawn</span>') + '</td>' +
+      '<td><span class="badge ' + (z.active?"b-turf":"b-slate") + '">' + (z.active?"Active":"Inactive") + '</span></td>' +
+      '<td style="white-space:nowrap;"><button class="zone-edit-btn" data-idx="' + i + '" style="background:none; border:none; color:var(--gold); font-size:12px; font-weight:600; cursor:pointer; margin-right:12px;">Edit</button>' +
+      '<button class="zone-delete-btn" data-id="' + z.id + '" data-name="' + esc(z.name) + '" style="background:none; border:none; color:var(--coral); font-size:12px; font-weight:600; cursor:pointer;">Delete</button></td></tr>'
+    );
+  }).join("");
+  return (
+    sectionHead("Zones", "Every zone on the platform. Zones created here belong to Karts2Me Platform directly — not tied to any single operator.",
+      '<button class="btn btn-primary" id="btnNewZone" style="width:auto;">+ New platform zone</button>') +
+    '<div class="panel" style="overflow-x:auto;"><table><thead><tr><th>Zone</th><th>Owner</th><th>Road type</th><th>Boundary</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+  );
+}
+
+var adminZoneBoundary = null;
+var adminZoneMap = null;
+
+function openZoneModal(existing){
+  var isEdit = !!existing;
+  var modes = isEdit ? (existing.enabled_modes||[]) : ["on_demand"];
+  adminZoneBoundary = isEdit && existing.boundary ? existing.boundary : null;
+  document.getElementById("modal").innerHTML = (
+    '<div class="modal-head"><h3 class="display">' + (isEdit?"Edit zone":"New platform zone") + '</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
+    '<div class="modal-body">' +
+      (isEdit ? '' : '<div class="demo-banner">This zone will be created under <strong>Karts2Me Platform</strong>, not an individual operator.</div>') +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Zone name</span><input class="field" id="azName" placeholder="e.g. Downtown Loop" value="' + (isEdit?esc(existing.name):"") + '"></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Road type</span><select class="field" id="azRoadType">' +
+        ZONE_ROAD_TYPES.map(function(rt){ return '<option value="'+rt[0]+'" '+(isEdit && existing.road_type===rt[0]?"selected":"")+'>'+rt[1]+'</option>'; }).join("") +
+      '</select></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Speed limit (mph)</span><input type="number" class="field" id="azSpeed" value="' + (isEdit?existing.speed_limit_mph:15) + '"></label>' +
+      '<div style="margin-bottom:14px;"><span class="field-label">Enabled ride modes</span>' +
+        ZONE_MODES.map(function(m){ return '<label style="display:inline-flex; align-items:center; gap:6px; margin-right:16px;"><input type="checkbox" class="azMode" value="' + m[0] + '" ' + (modes.indexOf(m[0])>-1?"checked":"") + '><span style="font-size:13px;">' + m[1] + '</span></label>'; }).join("") +
+      '</div>' +
+      (isEdit ? '<label style="display:flex; align-items:center; gap:8px; margin-bottom:14px;"><input type="checkbox" id="azActive" ' + (existing.active?"checked":"") + '><span style="font-size:14px;">Active</span></label>' : "") +
+      '<div style="margin-bottom:6px;"><span class="field-label">Boundary</span>' +
+        '<p style="font-size:12px; color:var(--slate); margin-bottom:10px;">Use the polygon tool on the map to trace this zone\'s real-world boundary (OpenStreetMap).</p>' +
+        '<div id="azMap" style="height:300px; border-radius:12px; overflow:hidden;"></div>' +
+        '<p id="azBoundaryStatus" style="font-size:12px; color:' + (adminZoneBoundary && adminZoneBoundary.length>=3 ? "var(--turf)" : "var(--coral)") + '; font-weight:600; margin-top:10px;">' +
+          (adminZoneBoundary && adminZoneBoundary.length>=3 ? "✓ Boundary drawn (" + adminZoneBoundary.length + " points)" : "No boundary drawn yet — optional, but recommended.") + '</p>' +
+      '</div>' +
+      '<div style="display:flex; justify-content:flex-end; gap:10px; margin-top:10px;"><button class="btn btn-ghost" id="azCancel">Cancel</button><button class="btn btn-primary" style="width:auto;" id="azCreate">' + (isEdit?"Save changes":"Create zone") + '</button></div>' +
+    '</div>'
+  );
+  document.getElementById("modalBackdrop").classList.remove("hidden");
+  setTimeout(function(){ mountAdminZoneMap(); }, 0);
+  document.getElementById("modalCloseBtn").onclick = closeModal;
+  document.getElementById("azCancel").onclick = closeModal;
+  document.getElementById("azCreate").onclick = async function(){
+    var name = document.getElementById("azName").value.trim();
+    if(!name) return;
+    var fields = {
+      name: name,
+      road_type: document.getElementById("azRoadType").value,
+      speed_limit_mph: Number(document.getElementById("azSpeed").value),
+      enabled_modes: Array.prototype.slice.call(document.querySelectorAll(".azMode:checked")).map(function(cb){ return cb.value; }),
+      boundary: adminZoneBoundary && adminZoneBoundary.length>=3 ? adminZoneBoundary : null,
+    };
+    if(fields.enabled_modes.length===0) fields.enabled_modes = ["on_demand"];
+    if(isEdit){
+      fields.active = document.getElementById("azActive").checked;
+      await sb.from("zones").update(fields).eq("id", existing.id);
+    } else {
+      fields.operator_id = PLATFORM_OPERATOR_ID;
+      fields.active = true;
+      await sb.from("zones").insert(fields);
+    }
+    closeModal(); await loadAdminData(); render();
+  };
+}
+
+function mountAdminZoneMap(){
+  if(adminZoneMap){ adminZoneMap.remove(); adminZoneMap = null; }
+  var center = [27.9504, -82.4573];
+  if(adminZoneBoundary && adminZoneBoundary.length){ center = adminZoneBoundary[0]; }
+  var m = L.map("azMap").setView(center, 15);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom:19 }).addTo(m);
+  if(adminZoneBoundary && adminZoneBoundary.length>=3){
+    L.polygon(adminZoneBoundary, { color:"#FA8411" }).addTo(m);
+  }
+  m.pm.addControls({ position:"topleft", drawMarker:false, drawCircleMarker:false, drawPolyline:false, drawRectangle:false, drawCircle:false, drawText:false, editMode:true, dragMode:false, cutPolygon:false, removalMode:true });
+  m.on("pm:create", function(e){
+    var latlngs = e.layer.getLatLngs()[0].map(function(p){ return [p.lat, p.lng]; });
+    adminZoneBoundary = latlngs;
+    var status = document.getElementById("azBoundaryStatus");
+    if(status){ status.style.color = "var(--turf)"; status.textContent = "✓ Boundary drawn (" + latlngs.length + " points)"; }
+  });
+  adminZoneMap = m;
+  setTimeout(function(){ m.invalidateSize(); }, 50);
+}
+
 function renderRefunds(){
   if(state.refundQueue.length===0){
     return sectionHead("Refund Requests", "Rider-submitted refund requests awaiting review.") +
@@ -450,7 +561,7 @@ function render(){
   }
 
   renderShell();
-  var map = { overview:renderOverview, operators:renderOperators, approvals:renderApprovals, refunds:renderRefunds, requirements:renderRequirements, support:renderSupport };
+  var map = { overview:renderOverview, operators:renderOperators, zones:renderZones, approvals:renderApprovals, refunds:renderRefunds, requirements:renderRequirements, support:renderSupport };
   document.getElementById("main").innerHTML = map[state.tab]();
   bindTab();
 }
@@ -513,6 +624,20 @@ function bindTab(){
     document.querySelectorAll("tr[data-op]").forEach(function(row){ row.onclick = function(){ openOperatorModal(row.dataset.op); }; });
     var newOpBtn = document.getElementById("btnNewOperator");
     if(newOpBtn) newOpBtn.onclick = openNewOperatorModal;
+  }
+  if(state.tab==="zones"){
+    var newZoneBtn = document.getElementById("btnNewZone");
+    if(newZoneBtn) newZoneBtn.onclick = function(){ openZoneModal(null); };
+    document.querySelectorAll(".zone-edit-btn").forEach(function(btn){
+      btn.onclick = function(){ openZoneModal(state.zones[Number(btn.dataset.idx)]); };
+    });
+    document.querySelectorAll(".zone-delete-btn").forEach(function(btn){
+      btn.onclick = async function(){
+        if(!confirm('Delete zone "' + btn.dataset.name + '"? This cannot be undone.')) return;
+        await sb.from("zones").delete().eq("id", btn.dataset.id);
+        await loadAdminData(); render();
+      };
+    });
   }
   if(state.tab==="approvals"){
     document.querySelectorAll(".doc-view-btn").forEach(function(btn){
