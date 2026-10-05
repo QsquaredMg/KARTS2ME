@@ -14,6 +14,7 @@
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://js.stripe.com/v3/"></script>
 <style>
+.osm-dark{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.9);}
   :root{
     --ink:#073876; --ink-2:#052C5C; --cream:#FFFFFF; --card:#FFFFFF;
     --orange:#FA8411; --orange-light:#FEE9D6; --coral:#E85D3F; --turf:#3D7A4D;
@@ -405,7 +406,7 @@ function mountMap(elId){
   driverMarker = null;
   var center = state.zoneCenter || DEFAULT_ZONE_CENTER;
   var m = L.map(elId, { zoomControl:false, attributionControl:false }).setView(center, 16);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom:19 }).addTo(m);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap contributors', className:'osm-dark' }).addTo(m);
   var youIcon = L.divIcon({ className:'', html:'<div class="k2-pin pulse-ring" style="background:var(--orange);"></div>' });
   L.marker(center, { icon: youIcon }).addTo(m);
   state.pois.forEach(function(p){

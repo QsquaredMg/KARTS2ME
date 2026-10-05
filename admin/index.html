@@ -454,7 +454,7 @@ function mountAdminZoneMap(){
   var center = [27.9504, -82.4573];
   if(adminZoneBoundary && adminZoneBoundary.length){ center = adminZoneBoundary[0]; }
   var m = L.map("azMap").setView(center, 15);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom:19 }).addTo(m);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap contributors' }).addTo(m);
   if(adminZoneBoundary && adminZoneBoundary.length>=3){
     L.polygon(adminZoneBoundary, { color:"#FA8411" }).addTo(m);
   }

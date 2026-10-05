@@ -682,7 +682,7 @@ function mountBoundaryMap(d){
   var zone = state.zones.find(function(z){ return z.id===d.zoneId; });
   var center = [27.9504, -82.4573]; // reasonable default; operator can pan/zoom to their property
   var m = L.map("boundaryMap").setView(center, 16);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom:19 }).addTo(m);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap contributors' }).addTo(m);
   if(d.boundary && d.boundary.length>=3){
     L.polygon(d.boundary, { color: "#FA8411" }).addTo(m);
   }
