@@ -174,7 +174,7 @@ async function loadAdminData(){
   var reqRes = await sb.from("vehicle_category_requirements").select("*");
   state.reqs = reqRes.data || [];
 
-  var tRes = await sb.from("support_tickets").select("*, operators(display_name)").order("created_at", { ascending:false });
+  var tRes = await sb.from("support_tickets").select("*, operators(display_name), profiles!support_tickets_created_by_fkey(full_name,phone)").order("created_at", { ascending:false });
   state.tickets = tRes.data || [];
 
   var rfRes = await sb.from("refund_requests").select("*, rides(dropoff_label, fare_cents, requested_at), profiles!refund_requests_requested_by_fkey(full_name)").eq("status", "pending").order("created_at", { ascending:false });

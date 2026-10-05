@@ -121,12 +121,51 @@ var vehicleCategories = [
   { key:"ada_cart", label:"ADA Cart" }, { key:"utility_cart", label:"Utility Cart" },
 ];
 
+var TERMS_VERSION = "2026-08-29";
+
 var state = {
   screen: "loading", authMode: "login", authError: null, session: null, profile: null, operator: null,
   tab: "overview", zones: [], vehicleTypes: [], events: [], approvedDrivers: [], pricing: null,
   eventDraft: null,
   isSuperAdmin: false, allOperators: [], activeOperatorId: null, viewingAll: false, allZones: [], allEvents: [], allVehicleTypes: [],
+  termsAgreed: false,
 };
+
+function screenTerms(){
+  return (
+    '<div class="authwrap">' +
+      '<div style="max-width:420px; margin:0 auto; padding:48px 20px;">' +
+        '<div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">' +
+          '<div style="width:36px; height:36px; border-radius:10px; background:var(--ink); display:flex; align-items:center; justify-content:center; color:var(--gold); font-weight:700; font-size:15px;">!</div>' +
+          '<p style="font-size:19px; font-weight:600;">Before you continue</p>' +
+        '</div>' +
+        '<p style="font-size:13px; color:var(--slate); line-height:1.5; margin-bottom:16px;">As an Operator you manage drivers, pricing, and payouts for your property. Please review and accept the Karts2Me Terms of Service to continue.</p>' +
+        '<div class="card" style="padding:16px; margin-bottom:12px;">' +
+          '<p style="font-size:13px; font-weight:600; margin-bottom:6px;">Arbitration Agreement</p>' +
+          '<p style="font-size:12px; color:var(--slate); line-height:1.5;">Disputes with Karts2Me are resolved through individual binding arbitration, not in court, and not as part of a class action. You may opt out within 30 days of accepting.</p>' +
+        '</div>' +
+        '<div class="card" style="padding:16px; margin-bottom:12px; border:1px solid var(--coral);">' +
+          '<p style="font-size:13px; font-weight:600; margin-bottom:6px; color:var(--coral);">Operator Responsibilities</p>' +
+          '<p style="font-size:12px; color:var(--slate); line-height:1.5;">Operators are responsible for their own on-site staff and policies, for zone/event rules they configure, and for Stripe Connect payouts to their employed drivers, as described in the Terms.</p>' +
+        '</div>' +
+        '<label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; margin-bottom:16px;">' +
+          '<input type="checkbox" id="agreeCheckbox" style="width:20px; height:20px; margin-top:1px; flex-shrink:0;" ' + (state.termsAgreed?"checked":"") + '>' +
+          '<span style="font-size:13px; line-height:1.4;">I have read and agree to the <b>Karts2Me Terms of Service</b>, including Arbitration, on behalf of my organization.</span>' +
+        '</label>' +
+        '<button id="continueBtn" class="btn-primary" style="width:100%;" ' + (state.termsAgreed?"":"disabled") + '>Agree &amp; continue</button>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function bindTerms(){
+  document.getElementById("agreeCheckbox").onchange = function(e){ state.termsAgreed = e.target.checked; render(); };
+  document.getElementById("continueBtn").onclick = async function(){
+    if(!state.termsAgreed) return;
+    await sb.from("profiles").update({ terms_accepted_at: new Date().toISOString(), terms_version: TERMS_VERSION }).eq("id", state.session.user.id);
+    await bootstrapProfile();
+  };
+}
 
 function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
 function catLabel(key){ var f = vehicleCategories.find(function(c){ return c.key===key; }); return f ? f.label : key; }
@@ -254,6 +293,7 @@ function renderShell(){
         opCardHtml +
           (state.isSuperAdmin ? '<button id="switchOperatorBtn">Switch operator</button>' : "") +
           (deferredInstallPrompt && !isStandalone() ? '<button id="installAppBtn">Install app</button>' : "") +
+          '<button id="helpBtn">Help / Support</button>' +
           '<button id="logoutBtn">Log out</button></div>' +
       '</aside>' +
       '<main class="main" id="main"></main>' +
@@ -261,6 +301,20 @@ function renderShell(){
   );
   document.querySelectorAll(".nav-item").forEach(function(btn){ btn.onclick = function(){ state.tab = btn.dataset.tab; render(); }; });
   document.getElementById("logoutBtn").onclick = async function(){ await sb.auth.signOut(); location.reload(); };
+  document.getElementById("helpBtn").onclick = async function(){
+    var subject = prompt("What do you need help with? (one line)", "");
+    if(subject === null || subject.trim() === "") return;
+    var body = prompt("Add any details that would help support look into it (optional):", "") || "";
+    var res = await sb.from("support_tickets").insert({
+      created_by: state.session.user.id,
+      operator_id: state.viewingAll ? null : state.operator.id,
+      subject: subject.trim().slice(0, 200),
+      body: body.trim().slice(0, 2000),
+      priority: "medium",
+    });
+    if(res.error){ alert("Couldn't submit that — please try again, or email support@karts2me.com directly."); }
+    else { alert("Thanks — support will follow up by email. You can also reach us anytime at support@karts2me.com."); }
+  };
   var installBtn = document.getElementById("installAppBtn");
   if(installBtn) installBtn.onclick = async function(){
     if(!deferredInstallPrompt) return;
@@ -754,6 +808,7 @@ function render(){
   if(state.screen==="forgotPassword"){ document.getElementById("root").innerHTML = screenForgotPassword(); bindForgotPassword(); return; }
   if(state.screen==="resetPassword"){ document.getElementById("root").innerHTML = screenResetPassword(); bindResetPassword(); return; }
   if(state.screen==="loading"){ document.getElementById("root").innerHTML = '<div class="authwrap"><p class="mono">Loading…</p></div>'; return; }
+  if(state.screen==="terms"){ document.getElementById("root").innerHTML = screenTerms(); bindTerms(); return; }
   if(state.screen==="denied"){
     document.getElementById("root").innerHTML =
       '<div class="authwrap"><div class="authcard"><p class="display" style="font-size:18px; margin-bottom:8px;">Not yet linked to an operator</p>' +
@@ -1021,6 +1076,12 @@ async function bootstrapProfile(){
   var profRes = await sb.from("profiles").select("*").eq("id", state.session.user.id).single();
   state.profile = profRes.data;
   state.isSuperAdmin = !!(state.profile && state.profile.role === "platform_admin");
+
+  if(!state.isSuperAdmin && state.profile && !state.profile.terms_accepted_at){
+    state.screen = "terms";
+    render();
+    return;
+  }
 
   if(state.isSuperAdmin){
     var opsRes = await sb.from("operators").select("id,display_name,zone_display_name,status").order("display_name");

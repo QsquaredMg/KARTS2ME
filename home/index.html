@@ -39,7 +39,11 @@
   .btn-primary:hover{background:var(--ink-2);}
   .btn-ghost{background:none; color:var(--ink); border-color:var(--slate-100);}
   .btn-ghost:hover{border-color:var(--ink);}
-  .navmenu-toggle{display:none; background:none; border:none; padding:6px;}
+  .navmenu-toggle{display:none; background:none; border:none; padding:6px; cursor:pointer; border-radius:8px;}
+  .navmenu-toggle:hover{background:var(--slate-100, #EEF0F3);}
+  .navmenu-drawer{display:none; flex-direction:column; gap:2px; padding:8px 20px 16px; border-top:1px solid var(--slate-100);}
+  .navmenu-drawer a{padding:12px 4px; font-size:15px; font-weight:500; text-decoration:none; color:var(--text); border-bottom:1px solid var(--slate-100);}
+  .navmenu-drawer a:last-child{border-bottom:none; color:var(--ink); font-weight:600;}
 
   /* ---------- hero ---------- */
   .hero{padding:72px 0 0;}
@@ -110,6 +114,7 @@
   @media (max-width: 860px){
     .navlinks{display:none;}
     .navmenu-toggle{display:block;}
+    .navmenu-drawer:not([hidden]){display:flex;}
     .navcta .btn-ghost{display:none;}
     .navcta .btn-primary{padding:10px 16px; font-size:13px;}
     .hero-grid{grid-template-columns:1fr; gap:40px;}
@@ -132,7 +137,7 @@
       <img src="/logo.png" width="34" height="34" alt="Karts2Me" style="border-radius:9px; display:block;">
       <span class="display" style="font-size:19px;">Karts<span style="color:var(--orange);">2</span>Me</span>
     </a>
-    <nav class="navlinks">
+    <nav class="navlinks" id="navlinks">
       <a href="#how-it-works">How it works</a>
       <a href="#drive">Drive</a>
       <a href="#manage">For properties</a>
@@ -140,9 +145,33 @@
     <div class="navcta">
       <a class="btn btn-ghost" href="https://ride.karts2me.com" style="padding:10px 16px;">Log in</a>
       <a class="btn btn-primary" href="https://ride.karts2me.com">Book a ride</a>
+      <button class="navmenu-toggle" id="navmenuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="navmenuDrawer">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" stroke="#073876" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
     </div>
   </div>
+  <nav class="navmenu-drawer" id="navmenuDrawer" hidden>
+    <a href="#how-it-works">How it works</a>
+    <a href="#drive">Drive</a>
+    <a href="#manage">For properties</a>
+    <a href="https://ride.karts2me.com">Log in</a>
+  </nav>
 </header>
+<script>
+  (function(){
+    var toggle = document.getElementById('navmenuToggle');
+    var drawer = document.getElementById('navmenuDrawer');
+    if (!toggle || !drawer) return;
+    toggle.addEventListener('click', function(){
+      var open = !drawer.hidden;
+      drawer.hidden = open;
+      toggle.setAttribute('aria-expanded', String(!open));
+    });
+    drawer.addEventListener('click', function(e){
+      if (e.target.tagName === 'A') { drawer.hidden = true; toggle.setAttribute('aria-expanded', 'false'); }
+    });
+  })();
+</script>
 
 <main>
 

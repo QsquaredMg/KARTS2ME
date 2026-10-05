@@ -279,7 +279,8 @@ function screenAuth(){
         '</div>'
       ) +
       (isSignup ? '<input id="authName" class="field" placeholder="Full name" style="margin-bottom:10px;">' : "") +
-      (isSignup ? '<input id="authPhone" class="field" placeholder="Phone (for text updates)" type="tel" style="margin-bottom:10px;">' : "") +
+      (isSignup ? '<input id="authPhone" class="field" placeholder="Phone (optional)" type="tel" style="margin-bottom:10px;">' : "") +
+      (isSignup ? '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; margin-bottom:10px;"><input type="checkbox" id="smsConsent" style="width:17px; height:17px; margin-top:1px; flex-shrink:0;"><span style="font-size:11px; color:var(--slate); line-height:1.4;">I agree to receive transactional text messages (ride requests, status updates, account notices) from Karts2Me at this number. Msg &amp; data rates may apply, frequency varies. Reply STOP to opt out, HELP for help.</span></label>' : "") +
       '<input id="authEmail" class="field" placeholder="Email" type="email" style="margin-bottom:10px;">' +
       '<input id="authPassword" class="field" placeholder="Password" type="password" style="margin-bottom:6px;">' +
       (state.authError ? '<div class="errbox">' + esc(state.authError) + '</div>' : "") +
@@ -462,6 +463,7 @@ function screenHome(){
         '<div><p class="mono" style="font-size:12px; color:var(--slate);">Good afternoon</p><p class="display" style="font-size:20px; font-weight:600;">Where to?</p></div>' +
         '<div style="display:flex; gap:8px;">' +
         '<button id="historyBtn" style="width:36px; height:36px; border-radius:99px; background:var(--ink); color:#fff; border:none; font-size:16px;">&#128337;</button>' +
+        '<button id="helpBtn" style="width:36px; height:36px; border-radius:99px; background:var(--ink); color:#fff; border:none; font-size:14px;" title="Help / Support">&#10067;</button>' +
         '<button id="logoutBtn" style="width:36px; height:36px; border-radius:99px; background:var(--ink); color:#fff; border:none; font-size:14px;">&#9099;</button>' +
         '</div>' +
       '</div>' +
@@ -606,7 +608,7 @@ function screenMode(){
   var opts = [
     { key:"on_demand", icon:"&#128663;", label:"On-Demand Cart", eta:(state.routeEtaMinutes ? state.routeEtaMinutes + " min" : "4 min"), price:"$" + t.toFixed(2) },
     { key:"fixed_route", icon:"&#128652;", label:"Fixed Route (next)", eta:"2 min", price:"Free", free:true },
-    { key:"reserved", icon:"&#128197;", label:"Reserve for later", eta:null, price:"&rarr;" },
+    { key:"reserved", icon:"&#128197;", label:"Reserve for later", eta:null, price:"Coming soon", disabled:true },
   ];
   return (
     '<div style="position:relative; height:100%;">' +
@@ -618,7 +620,7 @@ function screenMode(){
         '<p class="display" style="font-size:18px; font-weight:600; margin-bottom:16px;">' + esc(state.dest) + '</p>' +
         '<div style="display:flex; flex-direction:column; gap:10px;">' +
           opts.map(function(o){
-            return '<button class="mode-btn" data-mode="' + o.key + '" style="width:100%; display:flex; align-items:center; justify-content:space-between; border-radius:16px; padding:12px 16px; border:2px solid ' + (o.free?"var(--orange)":"var(--slate-100)") + '; background:' + (o.free?"var(--orange-light)":"#fff") + '; text-align:left;">' +
+            return '<button class="mode-btn" data-mode="' + o.key + '"' + (o.disabled ? ' disabled' : '') + ' style="width:100%; display:flex; align-items:center; justify-content:space-between; border-radius:16px; padding:12px 16px; border:2px solid ' + (o.free?"var(--orange)":"var(--slate-100)") + '; background:' + (o.free?"var(--orange-light)":"#fff") + '; text-align:left;' + (o.disabled ? ' opacity:0.5; cursor:not-allowed;' : '') + '">' +
               '<div style="display:flex; align-items:center; gap:12px;"><div style="width:40px; height:40px; border-radius:99px; background:var(--ink); color:#fff; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0;">' + o.icon + '</div><div><p style="font-size:14px; font-weight:700; color:var(--ink);">' + o.label + '</p>' +
               (o.eta ? '<p style="font-size:12px; color:var(--slate);">' + o.eta + ' away</p>' : '') + '</div></div>' +
               '<p class="mono" style="font-size:14px; font-weight:700; color:' + (o.free?"var(--orange)":"var(--ink)") + ';">' + o.price + '</p></button>';
@@ -709,14 +711,15 @@ function getRiderPosition(){
 
 async function createRide(){
   if(state.currentRideId) return;
-  var t = fareTotal();
+  var rideMode = state.selectedMode || "on_demand";
+  var t = rideMode==="fixed_route" ? 0 : fareTotal();
   // Real device GPS for pickup when available — falls back to the zone center
   // so drivers still get *a* pickup point rather than nothing at all.
   var pickupCoords = await getRiderPosition();
   var usedFallback = !pickupCoords;
   if(!pickupCoords) pickupCoords = state.zoneCenter || DEFAULT_ZONE_CENTER;
   var row = {
-    mode: "on_demand", zone_id: state.zoneId, event_id: state.eventId, primary_rider_id: state.session.user.id,
+    mode: rideMode, zone_id: state.zoneId, event_id: state.eventId, primary_rider_id: state.session.user.id,
     pickup_label: usedFallback ? "Approximate location" : "Current location", dropoff_label: state.dest,
     pickup_lat: pickupCoords[0], pickup_lng: pickupCoords[1],
     dropoff_lat: state.destCoords ? state.destCoords[0] : null,
@@ -902,6 +905,23 @@ function startBidsPolling(){
   }, 3000);
 }
 
+async function openSupportTicket(prefill){
+  var subject = prompt("What do you need help with? (one line)", prefill || "");
+  if(subject === null || subject.trim() === "") return;
+  var body = prompt("Add any details that would help support look into it (optional):", "") || "";
+  var res = await sb.from("support_tickets").insert({
+    created_by: state.session.user.id,
+    subject: subject.trim().slice(0, 200),
+    body: body.trim().slice(0, 2000) + (state.currentRideId ? ("\n\n[ride: " + state.currentRideId + "]") : ""),
+    priority: "medium",
+  });
+  if(res.error){
+    alert("Couldn't submit that — please try again, or email support@karts2me.com directly.");
+  } else {
+    alert("Thanks — support will follow up by email. You can also reach us anytime at support@karts2me.com.");
+  }
+}
+
 async function chooseBid(bidId){
   var res = await sb.rpc("accept_ride_bid", { p_bid_id: bidId });
   if(res.error){
@@ -994,7 +1014,7 @@ function screenActive(){
           '<div><p style="font-size:11px; color:var(--slate); margin-bottom:2px;">Ride</p><p style="font-size:13px; font-weight:700; color:var(--ink);" class="mono">#' + (state.currentRideId ? state.currentRideId.slice(0,8) : "&hellip;") + '</p></div>' +
           '<div><p style="font-size:11px; color:var(--slate); margin-bottom:2px;">Payment</p><p style="font-size:13px; font-weight:700; color:var(--ink);">Card on file</p></div>' +
         '</div>' +
-        '<button class="btn-primary" style="margin-bottom:10px;">Contact Driver</button>' +
+        '<button id="contactDriverBtn" class="btn-primary" style="margin-bottom:10px;">Need Help With This Ride?</button>' +
         '<button id="cancelActiveBtn" style="width:100%; background:none; border:none; font-size:13px; color:var(--coral); font-weight:600;" ' + (state.cancelling?"disabled":"") + '>' + (state.cancelling ? "Cancelling…" : "Cancel Ride") + '</button>' +
       '</div>' +
     '</div>'
@@ -1002,26 +1022,15 @@ function screenActive(){
 }
 
 function screenPost(){
-  if(!state.showTip){
-    return (
-      '<div style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 32px; text-align:center;">' +
-        '<p class="display" style="font-size:18px; font-weight:600; margin-bottom:4px;">Rate your ride</p>' +
-        '<p style="font-size:14px; color:var(--slate); margin-bottom:24px;">with ' + esc(state.assignedDriver ? state.assignedDriver.name : "your driver") + '</p>' +
-        '<div style="display:flex; gap:8px; margin-bottom:32px;">' +
-          [1,2,3,4,5].map(function(n){ return '<button class="star-btn" data-n="' + n + '" style="background:none; border:none; font-size:30px; opacity:' + (n<=state.rating?1:0.25) + ';">&#9733;</button>'; }).join("") +
-        '</div>' +
-        '<button id="toTip" class="btn-primary" style="max-width:200px;" ' + (state.rating===0?"disabled":"") + '>Continue</button>' +
-      '</div>'
-    );
-  }
   return (
     '<div style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 32px; text-align:center;">' +
-      '<p class="display" style="font-size:18px; font-weight:600; margin-bottom:4px;">Add a tip?</p>' +
-      '<p style="font-size:14px; color:var(--slate); margin-bottom:24px;">100% goes to ' + DRIVER.name + '</p>' +
-      '<div style="display:flex; gap:10px; margin-bottom:32px;">' +
-        [1,2,3].map(function(n){ return '<button class="tip-btn" data-n="' + n + '" style="padding:12px 20px; border-radius:12px; font-family:\'IBM Plex Mono\',monospace; font-weight:600; font-size:14px; border:none; background:' + (state.tip===n?"var(--ink)":"#F3F1EB") + '; color:' + (state.tip===n?"#fff":"var(--ink)") + ';">$' + n + '.00</button>'; }).join("") +
+      '<p class="display" style="font-size:18px; font-weight:600; margin-bottom:4px;">Rate your ride</p>' +
+      '<p style="font-size:14px; color:var(--slate); margin-bottom:24px;">with ' + esc(state.assignedDriver ? state.assignedDriver.name : "your driver") + '</p>' +
+      '<div style="display:flex; gap:8px; margin-bottom:32px;">' +
+        [1,2,3,4,5].map(function(n){ return '<button class="star-btn" data-n="' + n + '" style="background:none; border:none; font-size:30px; opacity:' + (n<=state.rating?1:0.25) + ';">&#9733;</button>'; }).join("") +
       '</div>' +
-      '<button id="finishRide" class="btn-primary" style="max-width:200px;">Done</button>' +
+      '<button id="finishRide" class="btn-primary" style="max-width:200px;" ' + (state.submittingRating?"disabled":"") + '>' + (state.submittingRating ? "Submitting…" : "Submit & Done") + '</button>' +
+      '<button id="skipRating" style="margin-top:10px; background:none; border:none; font-size:13px; color:var(--slate); font-weight:600;">Skip</button>' +
     '</div>'
   );
 }
@@ -1070,7 +1079,13 @@ function bind(){
       if(state.authMode==="signup"){
         var name = document.getElementById("authName").value.trim();
         var phoneRaw = document.getElementById("authPhone").value.trim();
-        var phone = normalizePhone(phoneRaw);
+        var smsConsent = document.getElementById("smsConsent").checked;
+        if(phoneRaw && !smsConsent){
+          state.authError = "Please check the SMS consent box, or leave the phone field blank.";
+          render();
+          return;
+        }
+        var phone = smsConsent ? normalizePhone(phoneRaw) : "";
         res = await sb.auth.signUp({ email:email, password:password, options:{ data:{ full_name:name, role:"rider", phone:phone } } });
       } else {
         res = await sb.auth.signInWithPassword({ email:email, password:password });
@@ -1138,6 +1153,7 @@ function bind(){
     document.getElementById("goSearch").onclick = function(){ go("search"); };
     document.getElementById("logoutBtn").onclick = async function(){ await sb.auth.signOut(); location.reload(); };
     document.getElementById("historyBtn").onclick = async function(){ await loadRideHistory(); go("history"); };
+    document.getElementById("helpBtn").onclick = function(){ openSupportTicket(""); };
     document.getElementById("changeLocationBtn").onclick = async function(){ await loadAvailableLocations(); go("chooseLocation"); };
     var pushBtn = document.getElementById("enablePushBtn");
     if(pushBtn) pushBtn.onclick = async function(){ var ok = await enablePushNotifications(); if(ok) render(); };
@@ -1179,8 +1195,10 @@ function bind(){
   if(s==="mode"){
     document.getElementById("backSearch").onclick = function(){ go("search"); };
     document.querySelectorAll(".mode-btn").forEach(function(btn){
+      if(btn.disabled) return;
       btn.onclick = function(){
         var mode = btn.dataset.mode;
+        state.selectedMode = mode;
         if(mode==="fixed_route") go("matching"); else go("confirm");
       };
     });
@@ -1211,6 +1229,7 @@ function bind(){
   }
   if(s==="active"){
     document.getElementById("cancelActiveBtn").onclick = cancelActiveRide;
+    document.getElementById("contactDriverBtn").onclick = function(){ openSupportTicket("Issue with my current ride"); };
     var __activePoll = setInterval(async function(){
       if(state.screen !== "active" || !state.currentRideId){ clearInterval(__activePoll); return; }
       var res = await sb.from("rides").select("status").eq("id", state.currentRideId).maybeSingle();
@@ -1221,17 +1240,23 @@ function bind(){
     }, 4000);
   }
   if(s==="post"){
-    if(!state.showTip){
-      document.querySelectorAll(".star-btn").forEach(function(btn){ btn.onclick = function(){ state.rating = Number(btn.dataset.n); render(); }; });
-      var toTip = document.getElementById("toTip"); if(toTip) toTip.onclick = function(){ if(state.rating>0){ state.showTip = true; render(); } };
-    } else {
-      document.querySelectorAll(".tip-btn").forEach(function(btn){ btn.onclick = function(){ state.tip = Number(btn.dataset.n); render(); }; });
-      document.getElementById("finishRide").onclick = function(){
-        state.screen="home"; state.dest=null; state.destCoords=null; state.routeEtaMinutes=null; state.routeDistanceMiles=null; state.seats=1; state.buyout=false; state.rating=0; state.showTip=false; state.tip=null; state.currentRideId=null; state.assignedDriver=null; state.driverLocation=null; state.rideBids=[];
-        state.people = [ { name:"You", status:"paid_confirmed" }, { name:"Maria", status:"paid_confirmed" }, { name:"Jake", status:"paid_unconfirmed" } ];
-        render();
-      };
+    document.querySelectorAll(".star-btn").forEach(function(btn){ btn.onclick = function(){ state.rating = Number(btn.dataset.n); render(); }; });
+    function resetAndGoHome(){
+      state.screen="home"; state.dest=null; state.destCoords=null; state.routeEtaMinutes=null; state.routeDistanceMiles=null; state.seats=1; state.buyout=false; state.rating=0; state.submittingRating=false; state.currentRideId=null; state.assignedDriver=null; state.driverLocation=null; state.rideBids=[];
+      state.people = [ { name:"You", status:"paid_confirmed" } ];
+      render();
     }
+    var skipBtn = document.getElementById("skipRating");
+    if(skipBtn) skipBtn.onclick = resetAndGoHome;
+    document.getElementById("finishRide").onclick = async function(){
+      if(state.rating > 0 && state.currentRideId){
+        state.submittingRating = true; render();
+        try {
+          await sb.rpc("submit_ride_rating", { p_ride_id: state.currentRideId, p_stars: state.rating, p_comment: null });
+        } catch(e) { /* non-fatal - still let the rider finish */ }
+      }
+      resetAndGoHome();
+    };
   }
 }
 

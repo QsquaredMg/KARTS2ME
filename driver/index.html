@@ -132,6 +132,23 @@ function getCurrentPosition(){
   });
 }
 
+async function openSupportTicket(prefill){
+  var subject = prompt("What do you need help with? (one line)", prefill || "");
+  if(subject === null || subject.trim() === "") return;
+  var body = prompt("Add any details that would help support look into it (optional):", "") || "";
+  var res = await sb.from("support_tickets").insert({
+    created_by: state.session.user.id,
+    subject: subject.trim().slice(0, 200),
+    body: body.trim().slice(0, 2000),
+    priority: "medium",
+  });
+  if(res.error){
+    alert("Couldn't submit that — please try again, or email support@karts2me.com directly.");
+  } else {
+    alert("Thanks — support will follow up by email. You can also reach us anytime at support@karts2me.com.");
+  }
+}
+
 async function checkEventEligibility(ride){
   var ev = ride.events;
   if(!ev) return { ok: true };
@@ -187,7 +204,8 @@ function screenAuth(){
         '<p style="font-size:13px; color:var(--slate); margin-top:4px;">' + (isSignup?"Apply for a vehicle category to get started":"Log back in to your driver account") + '</p>' +
       '</div>' +
       (isSignup ? '<input id="authName" class="field" placeholder="Full name">' : "") +
-      (isSignup ? '<input id="authPhone" class="field" placeholder="Phone (for text updates)" type="tel">' : "") +
+      (isSignup ? '<input id="authPhone" class="field" placeholder="Phone (optional)" type="tel">' : "") +
+      (isSignup ? '<label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; margin-top:10px;"><input type="checkbox" id="smsConsent" style="width:17px; height:17px; margin-top:1px; flex-shrink:0;"><span style="font-size:11px; color:var(--slate); line-height:1.4;">I agree to receive transactional text messages (new ride requests, status updates, account notices) from Karts2Me at this number. Msg &amp; data rates may apply, frequency varies. Reply STOP to opt out, HELP for help.</span></label>' : "") +
       '<input id="authEmail" class="field" placeholder="Email" type="email">' +
       '<input id="authPassword" class="field" placeholder="Password" type="password">' +
       (state.authError ? '<div class="errbox">'+esc(state.authError)+'</div>' : "") +
@@ -346,7 +364,10 @@ function screenHome(){
     '<div style="padding-bottom:24px;">' +
       '<div style="display:flex; align-items:center; justify-content:space-between; padding:48px 20px 4px;">' +
         '<div><p class="mono" style="font-size:12px; color:var(--slate);">Welcome back</p><p class="display" style="font-size:20px; font-weight:600;">'+esc(state.profile.full_name||"Driver")+'</p></div>' +
+        '<div style="display:flex; gap:8px;">' +
+        '<button id="helpBtn" style="width:36px; height:36px; border-radius:99px; background:var(--ink); color:#fff; border:none; font-size:14px;" title="Help / Support">&#10067;</button>' +
         '<button id="logoutBtn" style="width:36px; height:36px; border-radius:99px; background:var(--ink); color:#fff; border:none; font-size:14px;">&#9099;</button>' +
+        '</div>' +
       '</div>' +
       (Notification && Notification.permission!=="granted" ? '<div class="card" style="margin:20px 20px 0; padding:16px; background:var(--orange-light); box-shadow:none;">' +
         '<p style="font-size:13px; font-weight:600;">Get notified about new rides</p>' +
@@ -458,9 +479,9 @@ function screenEarnings(){
     '<div class="topbar"><p class="display" style="font-weight:600; font-size:18px;">Earnings</p><div style="width:36px;"></div></div>' +
     '<div style="padding:0 20px;">' +
       '<div class="card" style="padding:20px; background:var(--ink); margin-bottom:16px;">' +
-        '<p class="mono" style="font-size:11px; text-transform:uppercase; color:var(--gold);">Total earned</p>' +
+        '<p class="mono" style="font-size:11px; text-transform:uppercase; color:var(--gold);">Your earnings (after platform fee)</p>' +
         '<p class="display" style="font-size:32px; font-weight:600; color:#fff; margin-top:6px;">$'+(state.earningsTotal/100).toFixed(2)+'</p>' +
-        '<p style="font-size:12px; color:rgba(255,255,255,0.6); margin-top:4px;">'+state.earningsCount+' completed rides</p>' +
+        '<p style="font-size:12px; color:rgba(255,255,255,0.6); margin-top:4px;">'+state.earningsCount+' completed rides &middot; $'+((state.earningsGrossTotal||0)/100).toFixed(2)+' in rider fares'+(state.earningsFeePct!=null ? ' ('+state.earningsFeePct+'% platform fee)' : '')+'</p>' +
       '</div>' +
       '<div class="card" style="padding:20px; margin-bottom:16px;">' +
         '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">' +
@@ -471,7 +492,7 @@ function screenEarnings(){
         '</p>' +
         '<button id="setupPayoutsBtn" class="btn-primary" style="padding:10px;">' + (d.payout_account_id ? "Finish setup" : "Set up payouts") + '</button>' +
       '</div>' +
-      '<div style="font-size:12px; color:var(--slate); padding:0 4px; line-height:1.5;">Shown as gross fare per ride. Your share (after the platform fee) is transferred to your payout account automatically once each ride completes.</div>' +
+      '<div style="font-size:12px; color:var(--slate); padding:0 4px; line-height:1.5;">The total above is your estimated take-home, after the platform fee, for rides already transferred and rides pending transfer. It’s transferred to your payout account automatically once each ride completes.</div>' +
     '</div>'
   );
 }
@@ -499,10 +520,28 @@ async function loadMatchingRides(){
 }
 
 async function loadEarnings(){
-  var res = await sb.from("rides").select("fare_cents").eq("driver_id", state.session.user.id).eq("status", "completed");
+  var res = await sb.from("rides").select("fare_cents, payout_amount_cents").eq("driver_id", state.session.user.id).eq("status", "completed");
   var rows = res.data || [];
   state.earningsCount = rows.length;
-  state.earningsTotal = rows.reduce(function(a,r){ return a + (r.fare_cents||0); }, 0);
+  var grossTotal = rows.reduce(function(a,r){ return a + (r.fare_cents||0); }, 0);
+
+  // Prefer the actual transferred amount per ride (set once the real Stripe
+  // payout runs); fall back to estimating from the operator's platform fee
+  // for rides whose payout hasn't been transferred yet.
+  var feePct = null;
+  if(state.driver && state.driver.employing_operator_id){
+    var opRes = await sb.from("operators").select("platform_fee_percent").eq("id", state.driver.employing_operator_id).maybeSingle();
+    if(opRes.data) feePct = opRes.data.platform_fee_percent;
+  }
+  var netTotal = rows.reduce(function(a,r){
+    if(r.payout_amount_cents != null) return a + r.payout_amount_cents;
+    if(feePct != null) return a + Math.round((r.fare_cents||0) * (1 - feePct/100));
+    return a + (r.fare_cents||0);
+  }, 0);
+
+  state.earningsGrossTotal = grossTotal;
+  state.earningsTotal = netTotal;
+  state.earningsFeePct = feePct;
 }
 
 async function checkActiveRide(){
@@ -600,7 +639,13 @@ function bindAuth(){
     if(state.authMode==="signup"){
       var name = document.getElementById("authName").value.trim();
       var phoneRaw = document.getElementById("authPhone").value.trim();
-      var phone = normalizePhone(phoneRaw);
+      var smsConsent = document.getElementById("smsConsent").checked;
+      if(phoneRaw && !smsConsent){
+        state.authError = "Please check the SMS consent box, or leave the phone field blank.";
+        render();
+        return;
+      }
+      var phone = smsConsent ? normalizePhone(phoneRaw) : "";
       res = await sb.auth.signUp({ email:email, password:password, options:{ data:{ full_name:name, role:"driver", phone:phone } } });
     } else {
       res = await sb.auth.signInWithPassword({ email:email, password:password });
@@ -735,6 +780,7 @@ function bindStatus(){
 
 function bindHome(){
   document.getElementById("logoutBtn").onclick = async function(){ await sb.auth.signOut(); location.reload(); };
+  var helpBtn = document.getElementById("helpBtn"); if(helpBtn) helpBtn.onclick = function(){ openSupportTicket(""); };
   var pushBtn = document.getElementById("enablePushBtn");
   if(pushBtn) pushBtn.onclick = async function(){
     var ok = await enablePushNotifications();
