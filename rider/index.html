@@ -257,6 +257,8 @@ async function loadZoneData(){
   }
   var priceRes = await sb.from("operator_pricing").select("*").eq("operator_id", state.operatorId).maybeSingle();
   state.pricing = priceRes.data;
+  var opInfoRes = await sb.from("operators").select("display_name,zone_display_name,logo_url,contact_phone,contact_email,website_url,social_facebook,social_instagram,social_x,social_tiktok,social_youtube").eq("id", state.operatorId).maybeSingle();
+  state.operatorInfo = opInfoRes.data || null;
   var zoneRes = await sb.from("zones").select("driver_bidding_enabled").eq("id", state.zoneId).maybeSingle();
   state.zoneBiddingEnabled = !!(zoneRes.data && zoneRes.data.driver_bidding_enabled);
 }
@@ -550,6 +552,10 @@ function screenHome(){
         '<span style="color:var(--orange); font-size:14px;">&#128205;</span><span style="font-size:13px; font-weight:600; color:var(--ink);">' + esc(state.zoneName || "") + '</span>' +
         '<span style="font-size:11px; color:var(--slate); text-decoration:underline;">Change</span>' +
       '</button>' +
+      (state.operatorInfo && (state.operatorInfo.contact_phone || state.operatorInfo.contact_email || state.operatorInfo.website_url || state.operatorInfo.social_facebook || state.operatorInfo.social_instagram || state.operatorInfo.social_x || state.operatorInfo.social_tiktok || state.operatorInfo.social_youtube)
+        ? '<button id="contactOperatorBtn" style="display:flex; align-items:center; gap:8px; margin:0 20px 12px; background:#fff; border:none; border-radius:12px; padding:8px 12px; box-shadow:0 1px 3px rgba(0,0,0,0.06); font-size:12px; font-weight:600; color:var(--ink);">' +
+          (state.operatorInfo.logo_url ? '<img src="' + esc(state.operatorInfo.logo_url) + '" style="width:22px; height:22px; border-radius:6px; object-fit:cover;">' : '&#9742;') +
+          'Contact ' + esc(state.operatorInfo.zone_display_name || state.operatorInfo.display_name || "operator") + '</button>' : "") +
       '<div style="margin:0 20px; height:260px; border-radius:24px; overflow:hidden;"><div id="homeMap" style="width:100%; height:100%;"></div></div>' +
       (Notification && Notification.permission!=="granted" ? '<div style="padding:0 20px; margin-top:12px;"><div class="card" style="padding:14px; background:var(--orange-light); box-shadow:none;">' +
         '<p style="font-size:13px; font-weight:600;">Get ride updates instantly</p>' +
@@ -572,6 +578,28 @@ function screenHome(){
       '<div style="padding:8px 20px 0; text-align:center;"><button id="deleteAcctBtn" style="background:none; border:none; font-size:12px; color:var(--slate); text-decoration:underline;">Delete account</button></div>' +
     '</div>'
   );
+}
+
+
+function openOperatorContact(){
+  var o = state.operatorInfo; if(!o) return;
+  var rows = [["&#9742; Call", o.contact_phone, o.contact_phone ? "tel:" + o.contact_phone.replace(/[^+\d]/g,"") : ""],
+    ["&#9993; Email", o.contact_email, o.contact_email ? "mailto:" + o.contact_email : ""],
+    ["&#127760; Website", o.website_url, o.website_url],
+    ["Facebook", o.social_facebook, o.social_facebook], ["Instagram", o.social_instagram, o.social_instagram],
+    ["X", o.social_x, o.social_x], ["TikTok", o.social_tiktok, o.social_tiktok], ["YouTube", o.social_youtube, o.social_youtube]
+  ].filter(function(r){ return r[1] && /^(https?:|tel:|mailto:)/i.test(r[2]); });
+  openModal(
+    '<div class="modal-head"><p style="font-weight:700; font-size:16px;">' + esc(o.zone_display_name || o.display_name || "Operator") + '</p><button class="modal-close" id="ocClose">&times;</button></div>' +
+    '<div class="modal-body">' +
+      (o.logo_url ? '<img src="' + esc(o.logo_url) + '" style="display:block; max-width:120px; max-height:80px; object-fit:contain; margin:0 auto 14px;">' : '') +
+      rows.map(function(r){
+        return '<a href="' + esc(r[2]) + '" target="_blank" rel="noopener" style="display:block; background:#F3F1EB; border-radius:12px; padding:12px 14px; margin-bottom:8px; color:var(--ink); text-decoration:none; font-size:13px; font-weight:600;">' + r[0] +
+          '<span style="display:block; font-weight:400; color:var(--slate); font-size:12px; margin-top:2px; word-break:break-all;">' + esc(r[1]) + '</span></a>';
+      }).join("") +
+    '</div>'
+  );
+  document.getElementById("ocClose").onclick = closeModal;
 }
 
 var geocodeDebounceTimer = null;
@@ -1265,6 +1293,7 @@ function bind(){
   }
   if(s==="home"){
     document.getElementById("goSearch").onclick = function(){ go("search"); };
+    var coBtn = document.getElementById("contactOperatorBtn"); if(coBtn) coBtn.onclick = openOperatorContact;
     document.getElementById("logoutBtn").onclick = async function(){ await sb.auth.signOut(); location.reload(); };
     document.getElementById("historyBtn").onclick = async function(){ await loadRideHistory(); go("history"); };
     document.getElementById("helpBtn").onclick = function(){ openSupportTicket(""); };
