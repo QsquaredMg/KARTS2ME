@@ -1,6 +1,6 @@
 const CACHE_NAME = "kart2me-driver-v2";
 const OFFLINE_URL = "/offline.html";
-const PRECACHE = ["/", "/index.html", "/manifest.json", OFFLINE_URL, "/icon-192.png", "/icon-512.png"];
+const PRECACHE = ["/", "/index.html", "/manifest.json", "/shell.js", OFFLINE_URL, "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

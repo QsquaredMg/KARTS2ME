@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Karts2Me — Rider</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#073876">
@@ -71,6 +71,8 @@
   <div class="modal-backdrop hidden" id="modalBackdrop"><div class="modal" id="modal"></div></div>
 </div>
 
+<script>window.K2_ROLE="rider";</script>
+<script src="shell.js"></script>
 <script>
 /* ============================================================
    SUPABASE — REAL BACKEND CONNECTION
@@ -563,6 +565,7 @@ function screenHome(){
           return '<div class="card" style="display:flex; align-items:center; gap:10px; padding:12px 16px;"><span style="color:var(--coral);">&#128205;</span><span style="font-size:14px; font-weight:500;">' + esc(p.name) + '</span></div>';
         }).join("") +
       '</div>' +
+      '<div style="padding:8px 20px 0; text-align:center;"><button id="deleteAcctBtn" style="background:none; border:none; font-size:12px; color:var(--slate); text-decoration:underline;">Delete account</button></div>' +
     '</div>'
   );
 }
@@ -1180,7 +1183,7 @@ function bind(){
     if(forgotSubmitBtn) forgotSubmitBtn.onclick = async function(){
       var email = document.getElementById("forgotEmail").value.trim();
       if(!email){ state.authError = "Enter your email address."; render(); return; }
-      var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+      var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: (window.K2M_WEB_ORIGIN || window.location.origin) });
       if(res.error){ state.authError = res.error.message; render(); return; }
       state.authError = null;
       state.forgotSent = true;

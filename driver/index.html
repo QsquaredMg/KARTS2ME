@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Karts2Me — Driver</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#073876">
@@ -392,6 +392,7 @@ function screenHome(){
           state.approvals.filter(function(a){return a.status==="approved";}).map(function(a){ return '<span class="badge b-turf">'+catLabel(a.category)+'</span>'; }).join("") +
         '</div>' +
       '</div>' +
+      '<div style="padding:8px 20px 0; text-align:center;"><button id="deleteAcctBtn" style="background:none; border:none; font-size:12px; color:var(--slate); text-decoration:underline;">Delete account</button></div>' +
     '</div>'
   );
 }
@@ -668,7 +669,7 @@ function bindForgotPassword(){
   if(forgotSubmitBtn) forgotSubmitBtn.onclick = async function(){
     var email = document.getElementById("forgotEmail").value.trim();
     if(!email){ state.authError = "Enter your email address."; render(); return; }
-    var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+    var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: (window.K2M_WEB_ORIGIN || window.location.origin) });
     if(res.error){ state.authError = res.error.message; render(); return; }
     state.authError = null;
     state.forgotSent = true;

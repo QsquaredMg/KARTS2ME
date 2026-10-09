@@ -57,7 +57,7 @@
 <li><strong>Vehicle category applications</strong>: the type of vehicle you're applying to drive.</li>
 <li><strong>Identity verification</strong>: if you complete identity verification, this is handled entirely by Stripe Identity. Stripe collects your government-issued ID and a selfie directly — we never receive or store the document images themselves, only the verification result (verified / not verified).</li>
 <li><strong>Payout information</strong>: to receive payouts, you connect a bank account through Stripe Connect. Stripe holds your bank account details; we store only a reference ID and whether payouts are enabled.</li>
-<li><strong>Real-time location</strong>: when accepting a ride tied to a property with a defined boundary, your device's location is checked once, at the moment of acceptance, to confirm you're on the property. We do not continuously track driver location.</li>
+<li><strong>Real-time location</strong>: when accepting a ride tied to a property with a defined boundary, your device's location is checked once, at the moment of acceptance, to confirm you're on the property. While you have an active ride, the app shares your live location with the rider (about every 10 seconds) so they can see you approaching; this stops when the ride ends or you leave the app. We do not track your location when you have no active ride. Your last known position is cleared when you go offline or delete your account.</li>
 </ul>
 <h3>From operators</h3>
 <ul>
@@ -119,13 +119,13 @@
 <p>Drivers and riders involved in the same ride can see limited information about each other (such as a name and vehicle description) necessary to complete the ride, similar to other rideshare platforms.</p>
 <p>We may also disclose information if required by law, subpoena, or to protect the safety of our users.</p>
 <h2>5. Data retention</h2>
-<p>We retain account and ride information for as long as your account is active, and for a reasonable period afterward as needed for legal, tax, and dispute-resolution purposes. You can request deletion of your account at any time (see Section 7).</p>
+<p>We retain account and ride information for as long as your account is active, and for a reasonable period afterward as needed for legal, tax, and dispute-resolution purposes. You can request deletion of your account at any time (see Section 7). In-app deletion takes effect immediately.</p>
 <h2>6. Security</h2>
 <p>We use industry-standard measures to protect your information, including encrypted connections (HTTPS) for all data in transit, hashed password storage, and database access controls that restrict each user to their own data. No system is perfectly secure, and we cannot guarantee absolute security.</p>
 <h2>7. Your rights and choices</h2>
 <p>You can:
 - <strong>Access or correct</strong> your account information at any time by editing your profile.
-- <strong>Request deletion</strong> of your account and associated personal data by contacting us at support@karts2me.com. Some information may be retained where required by law (for example, financial records for tax purposes).
+- <strong>Delete your account</strong> directly in the app (tap <em>Delete account</em> at the bottom of the home screen), or by emailing support@karts2me.com. Deletion removes your sign-in and personal details (name, phone, photo, notification subscriptions). Records we must keep for legal, tax, payment-dispute and safety reasons &mdash; such as ride, payment, payout and identity-verification history &mdash; are retained without your name attached. You cannot delete your account while a ride is in progress.
 - <strong>Opt out of push notifications</strong> at any time through your device or browser settings.</p>
 <p>If you are a California resident, you may have additional rights under the CCPA. If you are located in the European Economic Area, you may have additional rights under the GDPR. Contact us to exercise these rights.</p>
 <h2>8. Children's privacy</h2>
