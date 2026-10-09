@@ -332,6 +332,12 @@ function openOperatorModal(id){
     '<div class="modal-head"><h3 class="display">' + esc(o.display_name) + '</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
     '<div class="modal-body">' +
       '<p class="field-label">Type</p><p style="margin-bottom:16px;">' + esc(o.type) + '</p>' +
+      '<p class="field-label">Contact</p><div style="margin-bottom:16px; font-size:13px; line-height:1.7;">' + (function(){
+        var rows = [["Phone", o.contact_phone, o.contact_phone ? "tel:" + o.contact_phone : ""],["Email", o.contact_email, o.contact_email ? "mailto:" + o.contact_email : ""],
+          ["Website", o.website_url, o.website_url],["Facebook", o.social_facebook, o.social_facebook],["Instagram", o.social_instagram, o.social_instagram],
+          ["X", o.social_x, o.social_x],["TikTok", o.social_tiktok, o.social_tiktok],["YouTube", o.social_youtube, o.social_youtube]].filter(function(r){ return r[1]; });
+        return rows.length ? rows.map(function(r){ return esc(r[0]) + ': <a href="' + esc(r[2]) + '" target="_blank" rel="noopener" style="color:var(--gold);">' + esc(r[1]) + '</a>'; }).join("<br>") : '<span style="color:var(--slate);">Not provided yet</span>';
+      })() + '</div>' +
       '<label style="display:block; margin-bottom:20px;"><span class="field-label">Platform fee override (%)</span>' +
         '<input type="number" class="field" id="feeOverride" value="' + o.platform_fee_percent + '" style="width:120px;"></label>' +
       '<div style="display:flex; justify-content:flex-end; gap:10px; margin-bottom:24px;"><button class="btn btn-danger" id="feeSave">Save fee</button>' + verifyBtn + '</div>' +

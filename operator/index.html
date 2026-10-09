@@ -282,7 +282,7 @@ function sectionHead(title, desc, actionHtml){
   return '<div class="section-head"><div><h2 class="display">' + title + '</h2><p>' + desc + '</p></div>' + (actionHtml||"") + '</div>';
 }
 
-var NAV = [["overview","Overview"],["zones","Zones"],["fleet","Fleet"],["events","Events"],["drivers","Drivers"],["pricing","Pricing"],["payouts","Payouts"],["branding","Branding"]];
+var NAV = [["overview","Overview"],["zones","Zones"],["fleet","Fleet"],["events","Events"],["drivers","Drivers"],["pricing","Pricing"],["payouts","Payouts"],["branding","Branding & contact"]];
 
 function renderShell(){
   var navHtml = NAV.map(function(pair){
@@ -957,6 +957,17 @@ function renderBranding(){
         '<button class="btn btn-primary" style="width:auto;" id="brSave">Save</button>' +
         (b.zone_display_name || b.primary_color_hex ? '<button class="btn btn-ghost" id="brReset">Reset to default</button>' : '') +
       '</div>' +
+    '</div>' +
+    '<div class="card" style="padding:20px; max-width:400px; margin-top:20px;">' +
+      '<p class="display" style="font-weight:600; font-size:16px; margin-bottom:4px;">Contact info</p>' +
+      '<p style="font-size:12px; color:var(--slate); margin-bottom:14px;">Shown to Karts2Me staff so riders and the platform can reach you.</p>' +
+      [["ctPhone","Phone","tel","contact_phone","(555) 123-4567"],["ctEmail","Email","email","contact_email","hello@yourcompany.com"],["ctWeb","Website","url","website_url","yourcompany.com"],
+       ["ctFb","Facebook","text","social_facebook","facebook.com/yourpage"],["ctIg","Instagram","text","social_instagram","@yourhandle or instagram.com/..."],
+       ["ctX","X (Twitter)","text","social_x","@yourhandle"],["ctTt","TikTok","text","social_tiktok","@yourhandle"],["ctYt","YouTube","text","social_youtube","youtube.com/@yourchannel"]].map(function(f){
+        return '<label style="display:block; margin-bottom:12px;"><span class="field-label">' + f[1] + '</span><input class="field" id="' + f[0] + '" type="' + f[2] + '" placeholder="' + f[4] + '" value="' + esc(b[f[3]]||"") + '"></label>';
+      }).join("") +
+      '<p id="ctMsg" style="font-size:12px; margin-bottom:8px;"></p>' +
+      '<button class="btn btn-primary" style="width:auto;" id="ctSave">Save contact info</button>' +
     '</div>'
   );
 }
@@ -1284,6 +1295,25 @@ function bindTab(){
         if(r.error) throw r.error;
         await loadOperatorData(state.activeOperatorId); render();
       }catch(e){ msg.style.color = "var(--coral)"; msg.textContent = "Upload failed: " + (e.message||e); }
+    };
+    document.getElementById("ctSave").onclick = async function(){
+      var msg = document.getElementById("ctMsg"), v = function(id){ return document.getElementById(id).value.trim(); };
+      var email = v("ctEmail");
+      if(email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ msg.style.color = "var(--coral)"; msg.textContent = "That email address doesn't look right."; return; }
+      function url(x){ return x && !/^https?:\/\//i.test(x) ? "https://" + x.replace(/^\/+/, "") : x; }
+      function handle(x, base){ if(!x) return x; if(/^https?:\/\//i.test(x) || x.indexOf(".") > -1) return url(x); return base + x.replace(/^@/, ""); }
+      var fields = {
+        contact_phone: v("ctPhone") || null, contact_email: email || null, website_url: url(v("ctWeb")) || null,
+        social_facebook: handle(v("ctFb"), "https://facebook.com/") || null, social_instagram: handle(v("ctIg"), "https://instagram.com/") || null,
+        social_x: handle(v("ctX"), "https://x.com/") || null, social_tiktok: handle(v("ctTt"), "https://tiktok.com/@") || null,
+        social_youtube: handle(v("ctYt"), "https://youtube.com/@") || null
+      };
+      this.disabled = true; msg.style.color = "var(--slate)"; msg.textContent = "Saving…";
+      var r = await sb.from("operators").update(fields).eq("id", state.activeOperatorId);
+      this.disabled = false;
+      if(r.error){ msg.style.color = "var(--coral)"; msg.textContent = "Couldn't save: " + r.error.message; return; }
+      Object.assign(state.operator, fields);
+      msg.style.color = "var(--turf, #3D7A4D)"; msg.textContent = "Saved.";
     };
     document.getElementById("brSave").onclick = async function(){
       await sb.from("operators").update({
