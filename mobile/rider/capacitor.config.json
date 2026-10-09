@@ -2,7 +2,7 @@
   "appId": "com.karts2me.rider",
   "appName": "Karts2Me",
   "webDir": "www",
-  "server": { "url": "https://rider.karts2me.com", "cleartext": false, "allowNavigation": ["*.karts2me.com", "*.supabase.co", "*.stripe.com", "js.stripe.com", "api.maptiler.com"] },
+  "server": { "url": "https://ride.karts2me.com", "cleartext": false, "allowNavigation": ["*.karts2me.com", "*.supabase.co", "*.stripe.com", "js.stripe.com", "api.maptiler.com"] },
   "ios": { "contentInset": "never", "backgroundColor": "#FAF8F3" },
   "android": { "backgroundColor": "#FAF8F3" },
   "plugins": {

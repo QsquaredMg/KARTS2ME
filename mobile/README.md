@@ -1,6 +1,6 @@
 # Karts2Me native apps (Capacitor)
 
-Two thin native shells that load the live web apps (`rider.karts2me.com`, `driver.karts2me.com`)
+Two thin native shells that load the live web apps (`ride.karts2me.com`, `driver.karts2me.com`)
 and add native chrome (splash, status bar, haptics, back button, keyboard) via `shell.js`.
 Web deploys update the apps instantly; store re-submission is only needed when native config/plugins change.
 
@@ -17,7 +17,7 @@ Icons/splash: `npm i -D @capacitor/assets` then put a 1024x1024 `assets/icon-onl
 ## Android (Google Play)
 1. Install Android Studio. `npx cap open android`.
 2. Build > Generate Signed Bundle (AAB). Keep the keystore safe — losing it blocks updates.
-3. Play Console ($25 one-time): create app, upload AAB, fill Data safety (location, name, email, phone, payments via Stripe; account deletion = in-app + support@karts2me.com), privacy URL `https://rider.karts2me.com/privacy.html`.
+3. Play Console ($25 one-time): create app, upload AAB, fill Data safety (location, name, email, phone, payments via Stripe; account deletion = in-app + support@karts2me.com), privacy URL `https://ride.karts2me.com/privacy.html`.
 4. New personal accounts must run a closed test (12+ testers, 14 days) before production; org accounts need D-U-N-S.
 5. Driver app: declare background location use + a short demo video; add `ACCESS_BACKGROUND_LOCATION` and a foreground-service notification.
 
