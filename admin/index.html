@@ -394,12 +394,14 @@ function renderZones(){
 }
 
 var adminZoneBoundary = null;
+var adminZoneCenter = null;
 var adminZoneMap = null;
 
 function openZoneModal(existing){
   var isEdit = !!existing;
   var modes = isEdit ? (existing.enabled_modes||[]) : ["on_demand"];
   adminZoneBoundary = isEdit && existing.boundary ? existing.boundary : null;
+  adminZoneCenter = isEdit && existing.center_lat != null ? [existing.center_lat, existing.center_lng] : null;
   document.getElementById("modal").innerHTML = (
     '<div class="modal-head"><h3 class="display">' + (isEdit?"Edit zone":"New platform zone") + '</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
     '<div class="modal-body">' +
@@ -438,6 +440,8 @@ function openZoneModal(existing){
       boundary: adminZoneBoundary && adminZoneBoundary.length>=3 ? adminZoneBoundary : null,
     };
     if(fields.enabled_modes.length===0) fields.enabled_modes = ["on_demand"];
+    var ctr = fields.boundary ? [fields.boundary.reduce(function(a,p){return a+p[0];},0)/fields.boundary.length, fields.boundary.reduce(function(a,p){return a+p[1];},0)/fields.boundary.length] : adminZoneCenter;
+    if(ctr){ fields.center_lat = ctr[0]; fields.center_lng = ctr[1]; }
     if(isEdit){
       fields.active = document.getElementById("azActive").checked;
       await sb.from("zones").update(fields).eq("id", existing.id);
@@ -493,7 +497,7 @@ function addMyLocation(m, opts){
 }
 
 
-function bindMapAddressSearch(m){
+function bindMapAddressSearch(m, onFound){
   var inp = document.getElementById("mapAddr"), btn = document.getElementById("mapAddrBtn");
   if(!inp || !btn) return;
   async function go(){
@@ -505,7 +509,7 @@ function bindMapAddressSearch(m){
       if(d && d[0]){
         var bb = d[0].boundingbox;
         if(bb) m.fitBounds([[+bb[0], +bb[2]], [+bb[1], +bb[3]]], { maxZoom:17 }); else m.setView([+d[0].lat, +d[0].lon], 17);
-        inp.style.borderColor = "";
+        inp.style.borderColor = ""; if(onFound) onFound(+d[0].lat, +d[0].lon);
       } else { inp.style.borderColor = "#E85D3F"; inp.placeholder = "No match \u2014 try a fuller address"; }
     }catch(e){ inp.style.borderColor = "#E85D3F"; }
     btn.textContent = "Go";
@@ -519,7 +523,7 @@ function mountAdminZoneMap(){
   var center = [27.9504, -82.4573];
   if(adminZoneBoundary && adminZoneBoundary.length){ center = adminZoneBoundary[0]; }
   var m = L.map("azMap").setView(center, 15);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap contributors' }).addTo(m);
+  L.tileLayer('https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=5LMpgOZZDdA04u0Lh4Tm', { maxZoom:19, tileSize:256, attribution:'&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(m);
   if(adminZoneBoundary && adminZoneBoundary.length>=3){
     L.polygon(adminZoneBoundary, { color:"#FA8411" }).addTo(m);
   }
@@ -531,7 +535,7 @@ function mountAdminZoneMap(){
     var status = document.getElementById("azBoundaryStatus");
     if(status){ status.style.color = "var(--turf)"; status.textContent = "✓ Boundary drawn (" + latlngs.length + " points)"; }
   });
-  bindMapAddressSearch(m);
+  bindMapAddressSearch(m, function(la, lo){ adminZoneCenter = [la, lo]; });
   adminZoneMap = m;
   setTimeout(function(){ m.invalidateSize(); }, 50);
 }

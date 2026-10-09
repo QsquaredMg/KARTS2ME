@@ -367,8 +367,11 @@ function renderZones(){
   );
 }
 
+var opZoneBoundary = null, opZoneCenter = null, opZoneMap = null;
 function openZoneModal(existing){
   var isEdit = !!existing;
+  opZoneBoundary = isEdit && existing.boundary ? existing.boundary : null;
+  opZoneCenter = isEdit && existing.center_lat != null ? [existing.center_lat, existing.center_lng] : null;
   openModal(
     '<div class="modal-head"><h3 class="display">' + (isEdit?"Edit zone":"New zone") + '</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
     '<div class="modal-body">' +
@@ -378,11 +381,17 @@ function openZoneModal(existing){
       '</select></label>' +
       '<label style="display:block; margin-bottom:14px;"><span class="field-label">Speed limit (mph)</span><input type="number" class="field" id="nzSpeed" value="' + (isEdit?existing.speed_limit_mph:15) + '"></label>' +
       (isEdit ? '<label style="display:flex; align-items:center; gap:8px; margin-bottom:14px;"><input type="checkbox" id="nzActive" ' + (existing.active?"checked":"") + '><span style="font-size:14px;">Active</span></label>' : "") +
+      '<div style="margin-bottom:14px;"><span class="field-label">Location &amp; boundary</span>' +
+        '<p style="font-size:12px; color:var(--slate); margin-bottom:8px;">Search the address, then (optional) trace the zone with the polygon tool. This lets riders find your zone by address.</p>' +
+        '<div style="display:flex; gap:6px; margin-bottom:6px;"><input id="mapAddr" class="field" placeholder="Search an address to jump the map&hellip;" autocomplete="off" style="margin-bottom:0;"><button type="button" id="mapAddrBtn" class="btn-ghost" style="padding:0 16px; border-radius:10px; cursor:pointer;">Go</button></div>' +
+        '<div id="nzMap" style="height:260px; border-radius:12px; overflow:hidden;"></div>' +
+      '</div>' +
       '<div style="display:flex; justify-content:flex-end; gap:10px;"><button class="btn btn-ghost" id="nzCancel">Cancel</button><button class="btn btn-primary" style="width:auto;" id="nzCreate">' + (isEdit?"Save changes":"Create zone") + '</button></div>' +
     '</div>'
   );
   document.getElementById("modalCloseBtn").onclick = closeModal;
   document.getElementById("nzCancel").onclick = closeModal;
+  setTimeout(mountOperatorZoneMap, 0);
   document.getElementById("nzCreate").onclick = async function(){
     var name = document.getElementById("nzName").value.trim();
     if(!name) return;
@@ -391,6 +400,9 @@ function openZoneModal(existing){
       road_type: document.getElementById("nzRoadType").value,
       speed_limit_mph: Number(document.getElementById("nzSpeed").value),
     };
+    if(opZoneBoundary && opZoneBoundary.length>=3) fields.boundary = opZoneBoundary;
+    var octr = (opZoneBoundary && opZoneBoundary.length>=3) ? [opZoneBoundary.reduce(function(a,p){return a+p[0];},0)/opZoneBoundary.length, opZoneBoundary.reduce(function(a,p){return a+p[1];},0)/opZoneBoundary.length] : opZoneCenter;
+    if(octr){ fields.center_lat = octr[0]; fields.center_lng = octr[1]; }
     if(isEdit){
       fields.active = document.getElementById("nzActive").checked;
       await sb.from("zones").update(fields).eq("id", existing.id);
@@ -402,6 +414,21 @@ function openZoneModal(existing){
     }
     closeModal(); await loadOperatorData(state.activeOperatorId); render();
   };
+}
+
+
+function mountOperatorZoneMap(){
+  if(opZoneMap){ opZoneMap.remove(); opZoneMap = null; }
+  var center = opZoneBoundary && opZoneBoundary.length ? opZoneBoundary[0] : (opZoneCenter || [27.9504, -82.4573]);
+  var m = L.map("nzMap").setView(center, 15);
+  L.tileLayer('https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=5LMpgOZZDdA04u0Lh4Tm', { maxZoom:19, tileSize:256, attribution:'&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(m);
+  if(opZoneBoundary && opZoneBoundary.length>=3){ L.polygon(opZoneBoundary, { color:"#FA8411" }).addTo(m); }
+  addMyLocation(m, { auto:!(opZoneBoundary || opZoneCenter) });
+  m.pm.addControls({ position:"topleft", drawMarker:false, drawCircleMarker:false, drawPolyline:false, drawRectangle:false, drawCircle:false, drawText:false, editMode:true, dragMode:false, cutPolygon:false, removalMode:true });
+  m.on("pm:create", function(e){ opZoneBoundary = e.layer.getLatLngs()[0].map(function(p){ return [p.lat, p.lng]; }); });
+  bindMapAddressSearch(m, function(la, lo){ opZoneCenter = [la, lo]; });
+  opZoneMap = m;
+  setTimeout(function(){ m.invalidateSize(); }, 50);
 }
 
 /* ---------- FLEET ---------- */
@@ -721,7 +748,7 @@ function addMyLocation(m, opts){
 }
 
 
-function bindMapAddressSearch(m){
+function bindMapAddressSearch(m, onFound){
   var inp = document.getElementById("mapAddr"), btn = document.getElementById("mapAddrBtn");
   if(!inp || !btn) return;
   async function go(){
@@ -733,7 +760,7 @@ function bindMapAddressSearch(m){
       if(d && d[0]){
         var bb = d[0].boundingbox;
         if(bb) m.fitBounds([[+bb[0], +bb[2]], [+bb[1], +bb[3]]], { maxZoom:17 }); else m.setView([+d[0].lat, +d[0].lon], 17);
-        inp.style.borderColor = "";
+        inp.style.borderColor = ""; if(onFound) onFound(+d[0].lat, +d[0].lon);
       } else { inp.style.borderColor = "#E85D3F"; inp.placeholder = "No match \u2014 try a fuller address"; }
     }catch(e){ inp.style.borderColor = "#E85D3F"; }
     btn.textContent = "Go";
@@ -747,7 +774,7 @@ function mountBoundaryMap(d){
   var zone = state.zones.find(function(z){ return z.id===d.zoneId; });
   var center = [27.9504, -82.4573]; // reasonable default; operator can pan/zoom to their property
   var m = L.map("boundaryMap").setView(center, 16);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap contributors' }).addTo(m);
+  L.tileLayer('https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=5LMpgOZZDdA04u0Lh4Tm', { maxZoom:19, tileSize:256, attribution:'&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(m);
   if(d.boundary && d.boundary.length>=3){
     L.polygon(d.boundary, { color: "#FA8411" }).addTo(m);
   }

@@ -14,7 +14,6 @@
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://js.stripe.com/v3/"></script>
 <style>
-.osm-dark{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.9);}
   :root{
     --ink:#073876; --ink-2:#052C5C; --cream:#FFFFFF; --card:#FFFFFF;
     --orange:#FA8411; --orange-light:#FEE9D6; --coral:#E85D3F; --turf:#3D7A4D;
@@ -168,7 +167,7 @@ async function enablePushNotifications(){
 }
 
 async function loadAvailableLocations(){
-  var zonesRes = await sb.from("zones").select("id,operator_id,name,active,boundary,operators(display_name,zone_display_name)").eq("active", true);
+  var zonesRes = await sb.from("zones").select("id,operator_id,name,active,boundary,center_lat,center_lng,operators(display_name,zone_display_name)").eq("active", true);
   var eventsRes = await sb.from("events").select("id,operator_id,zone_id,name,rider_access_mode,status,ends_at,operators(display_name)").eq("rider_access_mode", "open");
   var poiRes = await sb.from("points_of_interest").select("zone_id,lat,lng");
   var centers = {};
@@ -176,6 +175,7 @@ async function loadAvailableLocations(){
     var pts = Array.isArray(z.boundary) ? z.boundary.filter(function(p){ return Array.isArray(p) && p.length>=2; }) : [];
     if(pts.length){ centers[z.id] = [pts.reduce(function(a,p){return a+p[0];},0)/pts.length, pts.reduce(function(a,p){return a+p[1];},0)/pts.length]; }
   });
+  (zonesRes.data || []).forEach(function(z){ if(z.center_lat != null && z.center_lng != null){ centers[z.id] = [z.center_lat, z.center_lng]; } });
   var acc = {};
   (poiRes.data || []).forEach(function(p){ (acc[p.zone_id] = acc[p.zone_id] || []).push(p); });
   Object.keys(acc).forEach(function(zid){
@@ -477,7 +477,7 @@ function mountMap(elId){
   driverMarker = null;
   var center = state.zoneCenter || DEFAULT_ZONE_CENTER;
   var m = L.map(elId, { zoomControl:false, attributionControl:true }).setView(center, 16);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap contributors', className:'osm-dark' }).addTo(m);
+  L.tileLayer('https://api.maptiler.com/maps/streets-v2-dark/{z}/{x}/{y}.png?key=5LMpgOZZDdA04u0Lh4Tm', { maxZoom:19, tileSize:256, attribution:'&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(m);
   var youIcon = L.divIcon({ className:'', html:'<div class="k2-pin pulse-ring" style="background:var(--orange);"></div>' });
   var youMarker = L.marker(center, { icon: youIcon }).addTo(m);
   state.pois.forEach(function(p){
