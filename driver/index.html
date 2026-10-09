@@ -305,11 +305,47 @@ function screenApply(){
       '<input id="applyLicenseFile" type="file" accept="image/*,application/pdf" class="field">' +
       '<label style="display:block; font-size:11px; font-weight:600; text-transform:uppercase; color:var(--slate); margin-top:14px; margin-bottom:6px;">Proof of insurance (photo or PDF)</label>' +
       '<input id="applyInsuranceFile" type="file" accept="image/*,application/pdf" class="field">' +
+      '<label style="display:block; font-size:11px; font-weight:600; text-transform:uppercase; color:var(--slate); margin-top:14px; margin-bottom:6px;">Your ID photo ' + (state.driver && state.driver.id_photo_path ? '(on file &mdash; choose another to replace)' : '(face clearly visible)') + '</label>' +
+      '<input id="applyIdPhoto" type="file" accept="image/*" capture="user" class="field">' +
       (state.applyError ? '<div class="errbox">'+esc(state.applyError)+'</div>' : "") +
       '<button id="applySubmit" class="btn-primary" style="margin-top:16px;">Submit application</button>' +
       (state.approvals.length>0 ? '<button id="skipToStatus" style="background:none; border:none; margin-top:14px; font-size:13px; color:var(--slate); text-decoration:underline; display:block; width:100%; text-align:center;">Back to my applications</button>' : "") +
     '</div>'
   );
+}
+
+
+/* ---------- ID PHOTO ---------- */
+function k2ResizeImage(file, maxDim){
+  return new Promise(function(resolve, reject){
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function(){
+      var sc = Math.min(1, maxDim / Math.max(img.width, img.height));
+      var c = document.createElement("canvas"); c.width = Math.round(img.width*sc); c.height = Math.round(img.height*sc);
+      var ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0,0,c.width,c.height); ctx.drawImage(img,0,0,c.width,c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob(function(b){ b ? resolve(b) : reject(new Error("Could not process the photo.")); }, "image/jpeg", 0.88);
+    };
+    img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error("That file isn't a supported photo. Try taking a new one.")); };
+    img.src = url;
+  });
+}
+async function uploadIdPhoto(file){
+  var blob = await k2ResizeImage(file, 1000);
+  var uid = state.session.user.id;
+  var path = uid + "/id-photo-" + Date.now() + ".jpg";
+  var up = await sb.storage.from("driver-documents").upload(path, blob, { contentType: "image/jpeg" });
+  if(up.error) throw new Error(up.error.message);
+  var r = await sb.from("drivers").update({ id_photo_path: path }).eq("id", uid);
+  if(r.error) throw new Error(r.error.message);
+  state.driver.id_photo_path = path;
+  return path;
+}
+async function showIdPhoto(imgId){
+  var el = document.getElementById(imgId);
+  if(!el || !state.driver || !state.driver.id_photo_path) return;
+  var r = await sb.storage.from("driver-documents").createSignedUrl(state.driver.id_photo_path, 600);
+  if(r.data && el) { el.src = r.data.signedUrl; el.style.display = "block"; }
 }
 
 /* ---------- STATUS ---------- */
@@ -349,6 +385,16 @@ function screenStatus(){
         '</div>' +
         '<p style="font-size:12px; color:var(--slate); margin-bottom:' + (idButtonLabel ? '10px' : '0') + ';">Confirms your government ID matches a live selfie.</p>' +
         (idButtonLabel ? '<button id="verifyIdentityBtn" class="btn-ghost" style="padding:10px;">' + idButtonLabel + '</button>' : "") +
+      '</div>' +
+      '<div class="card" style="padding:16px; margin-bottom:14px;">' +
+        '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">' +
+          '<p style="font-size:14px; font-weight:600;">ID photo</p>' +
+          (d.id_photo_path ? '<span class="badge b-turf">On file</span>' : '<span class="badge b-coral">Required</span>') + '</div>' +
+        '<p style="font-size:12px; color:var(--slate); margin-bottom:10px;">A clear photo of your face. Only Karts2Me staff can see it.</p>' +
+        '<img id="idPhotoPreview" style="display:none; width:96px; height:96px; object-fit:cover; border-radius:16px; margin-bottom:10px;">' +
+        '<input id="idPhotoInput" type="file" accept="image/*" capture="user" style="display:none;">' +
+        '<button id="idPhotoBtn" class="btn-ghost" style="padding:10px;">' + (d.id_photo_path ? 'Retake / replace photo' : 'Take or upload photo') + '</button>' +
+        '<p id="idPhotoMsg" style="font-size:12px; color:var(--coral); margin-top:6px;"></p>' +
       '</div>' +
       (rows || '<p style="font-size:13px; color:var(--slate); text-align:center; padding:20px;">No applications yet.</p>') +
       '<button id="applyMore" class="btn-ghost" style="margin-top:8px;">+ Apply for another category</button>' +
@@ -714,8 +760,14 @@ function bindApply(){
     var cat = document.getElementById("applyCategory").value;
     var licFile = document.getElementById("applyLicenseFile").files[0];
     var insFile = document.getElementById("applyInsuranceFile").files[0];
+    var idFile = document.getElementById("applyIdPhoto").files[0];
     if(!licFile || !insFile){
       state.applyError = "Please upload both your license and proof of insurance.";
+      render();
+      return;
+    }
+    if(!idFile && !(state.driver && state.driver.id_photo_path)){
+      state.applyError = "Please take or upload your ID photo.";
       render();
       return;
     }
@@ -728,6 +780,7 @@ function bindApply(){
     var licPath = uid + "/" + stamp + "-license." + licExt;
     var insPath = uid + "/" + stamp + "-insurance." + insExt;
     try{
+      if(idFile) await uploadIdPhoto(idFile);
       var licUp = await sb.storage.from("driver-documents").upload(licPath, licFile);
       if(licUp.error) throw new Error(licUp.error.message);
       var insUp = await sb.storage.from("driver-documents").upload(insPath, insFile);
@@ -755,6 +808,17 @@ function bindStatus(){
     await loadEarnings(); await checkActiveRide();
     render();
   };
+  var idBtn = document.getElementById("idPhotoBtn");
+  if(idBtn){
+    showIdPhoto("idPhotoPreview");
+    idBtn.onclick = function(){ document.getElementById("idPhotoInput").click(); };
+    document.getElementById("idPhotoInput").onchange = async function(){
+      var f = this.files && this.files[0]; if(!f) return;
+      var msg = document.getElementById("idPhotoMsg"); msg.style.color = "var(--slate)"; msg.textContent = "Uploading…"; idBtn.disabled = true;
+      try{ await uploadIdPhoto(f); render(); }
+      catch(e){ msg.style.color = "var(--coral)"; msg.textContent = e.message || "Upload failed."; idBtn.disabled = false; }
+    };
+  }
   var verifyBtn = document.getElementById("verifyIdentityBtn");
   if(verifyBtn) verifyBtn.onclick = async function(){
     if(state.driver.identity_verification_status === "processing"){

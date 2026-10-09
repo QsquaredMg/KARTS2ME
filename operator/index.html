@@ -440,7 +440,7 @@ function mountOperatorZoneMap(){
 function renderFleet(){
   var cards = state.vehicleTypes.map(function(vt){
     return (
-      '<div class="card fleet-card"><div><span class="badge b-ink">' + catLabel(vt.category) + '</span>' +
+      '<div class="card fleet-card"><div>' + (vt.photo_url ? '<img src="' + esc(vt.photo_url) + '" style="width:140px; height:90px; object-fit:cover; border-radius:12px; display:block; margin-bottom:10px;">' : '') + '<span class="badge b-ink">' + catLabel(vt.category) + '</span>' +
         '<p class="display" style="font-weight:600; font-size:18px; margin-top:10px;">' + esc(vt.label) + '</p>' +
         '<p style="font-size:12px; color:var(--slate); margin-top:4px;">Capacity: ' + vt.capacity + ' riders</p></div>' +
         '<div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">' +
@@ -462,6 +462,10 @@ function openVTModal(existing){
       '<label style="display:block; margin-bottom:14px;"><span class="field-label">Category</span><select class="field" id="vtCategory">' +
         vehicleCategories.map(function(c){ return '<option value="' + c.key + '" ' + (isEdit && existing.category===c.key?"selected":"") + '>' + c.label + '</option>'; }).join("") + '</select></label>' +
       '<label style="display:block; margin-bottom:14px;"><span class="field-label">Capacity</span><input type="number" class="field" id="vtCapacity" value="' + (isEdit?existing.capacity:4) + '"></label>' +
+      '<div style="margin-bottom:14px;"><span class="field-label">Photo of this cart</span>' +
+        (isEdit && existing.photo_url ? '<img src="' + esc(existing.photo_url) + '" style="display:block; width:100%; max-height:160px; object-fit:cover; border-radius:12px; margin:6px 0;">' : '') +
+        '<input type="file" id="vtPhoto" accept="image/*" style="display:block; font-size:12px; margin-top:4px;"></div>' +
+      '<p id="vtMsg" style="font-size:12px; color:var(--coral); margin-bottom:8px;"></p>' +
       '<div style="display:flex; justify-content:flex-end; gap:10px;"><button class="btn btn-ghost" id="vtCancel">Cancel</button><button class="btn btn-primary" style="width:auto;" id="vtCreate">' + (isEdit?"Save changes":"Create") + '</button></div>' +
     '</div>'
   );
@@ -475,6 +479,12 @@ function openVTModal(existing){
       category: document.getElementById("vtCategory").value,
       capacity: Number(document.getElementById("vtCapacity").value),
     };
+    var photo = document.getElementById("vtPhoto").files[0];
+    if(photo){
+      var btn = document.getElementById("vtCreate"); btn.disabled = true; btn.textContent = "Uploading…";
+      try{ fields.photo_url = await k2UploadOperatorImage(photo, "vehicles", 1200, false); }
+      catch(e){ document.getElementById("vtMsg").textContent = "Photo upload failed: " + (e.message||e); btn.disabled = false; btn.textContent = isEdit?"Save changes":"Create"; return; }
+    }
     if(isEdit){
       await sb.from("vehicle_types").update(fields).eq("id", existing.id);
     } else {
@@ -868,6 +878,12 @@ function renderBranding(){
   return (
     sectionHead("Branding", "Updates your real operators row.") +
     '<div class="card" style="padding:20px; max-width:400px;">' +
+      '<div style="display:flex; align-items:center; gap:14px; margin-bottom:16px;">' +
+        '<div style="width:72px; height:72px; border-radius:16px; background:#F3F1EB; overflow:hidden; display:flex; align-items:center; justify-content:center; flex-shrink:0;">' +
+          (b.logo_url ? '<img src="' + esc(b.logo_url) + '" style="width:100%; height:100%; object-fit:contain;">' : '<span style="font-size:11px; color:var(--slate);">No logo</span>') + '</div>' +
+        '<div><span class="field-label">Company logo</span>' +
+          '<input type="file" id="brLogoFile" accept="image/png,image/jpeg,image/webp" style="display:block; font-size:12px; margin-top:4px; max-width:240px;">' +
+          '<p id="brLogoMsg" style="font-size:11px; color:var(--slate); margin-top:4px;">PNG or JPG. Square works best.</p></div></div>' +
       '<label style="display:block; margin-bottom:14px;"><span class="field-label">Zone display name</span><input class="field" id="brName" value="' + esc(b.zone_display_name||b.display_name) + '"></label>' +
       '<label style="display:block; margin-bottom:14px;"><span class="field-label">Primary color</span><input type="color" id="brColor" value="' + (b.primary_color_hex||"#0E1A2B") + '" style="width:50px; height:36px; border:none; border-radius:8px;"></label>' +
       '<div style="display:flex; gap:10px;">' +
@@ -876,6 +892,31 @@ function renderBranding(){
       '</div>' +
     '</div>'
   );
+}
+
+
+/* ---------- IMAGE UPLOAD HELPERS ---------- */
+function k2ResizeImage(file, maxDim, asPng){
+  return new Promise(function(resolve, reject){
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function(){
+      var sc = Math.min(1, maxDim / Math.max(img.width, img.height));
+      var c = document.createElement("canvas"); c.width = Math.round(img.width*sc); c.height = Math.round(img.height*sc);
+      var ctx = c.getContext("2d");
+      if(!asPng){ ctx.fillStyle = "#fff"; ctx.fillRect(0,0,c.width,c.height); }
+      ctx.drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      c.toBlob(function(b){ b ? resolve(b) : reject(new Error("Could not process image")); }, asPng ? "image/png" : "image/jpeg", 0.85);
+    };
+    img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error("That file isn't a supported image (use JPG or PNG).")); };
+    img.src = url;
+  });
+}
+async function k2UploadOperatorImage(file, folder, maxDim, asPng){
+  var blob = await k2ResizeImage(file, maxDim, asPng);
+  var path = state.activeOperatorId + "/" + folder + "/" + Date.now() + (asPng ? ".png" : ".jpg");
+  var up = await sb.storage.from("operator-media").upload(path, blob, { contentType: asPng ? "image/png" : "image/jpeg", cacheControl: "31536000" });
+  if(up.error) throw up.error;
+  return sb.storage.from("operator-media").getPublicUrl(path).data.publicUrl;
 }
 
 /* ---------- MODAL HELPERS ---------- */
@@ -1150,6 +1191,16 @@ function bindTab(){
     };
   }
   if(state.tab==="branding"){
+    document.getElementById("brLogoFile").onchange = async function(){
+      var f = this.files && this.files[0]; if(!f) return;
+      var msg = document.getElementById("brLogoMsg"); msg.textContent = "Uploading…";
+      try{
+        var url = await k2UploadOperatorImage(f, "logo", 512, true);
+        var r = await sb.from("operators").update({ logo_url: url }).eq("id", state.activeOperatorId);
+        if(r.error) throw r.error;
+        await loadOperatorData(state.activeOperatorId); render();
+      }catch(e){ msg.style.color = "var(--coral)"; msg.textContent = "Upload failed: " + (e.message||e); }
+    };
     document.getElementById("brSave").onclick = async function(){
       await sb.from("operators").update({
         zone_display_name: document.getElementById("brName").value,
