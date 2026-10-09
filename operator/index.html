@@ -244,7 +244,7 @@ async function loadOperatorData(opId){
   var evRes = await sb.from("events").select("*").eq("operator_id", opId).order("created_at", { ascending:false });
   state.events = evRes.data || [];
 
-  var drRes = await sb.from("category_approvals").select("*, drivers(id, employment_type, employing_operator_id, profiles(full_name))").eq("status", "approved");
+  var drRes = await sb.from("category_approvals").select("*, drivers(id, employment_type, employing_operator_id, id_photo_path, profiles(full_name))").eq("status", "approved");
   state.approvedDrivers = drRes.data || [];
 
   var prRes = await sb.from("operator_pricing").select("*").eq("operator_id", opId).maybeSingle();
@@ -269,7 +269,7 @@ async function loadAllOperatorsData(){
   var evRes = await sb.from("events").select("*, operators(display_name)").order("created_at", { ascending:false });
   state.allEvents = evRes.data || [];
 
-  var drRes = await sb.from("category_approvals").select("*, drivers(id, employment_type, employing_operator_id, profiles(full_name))").eq("status", "approved");
+  var drRes = await sb.from("category_approvals").select("*, drivers(id, employment_type, employing_operator_id, id_photo_path, profiles(full_name))").eq("status", "approved");
   state.approvedDrivers = drRes.data || [];
 }
 
@@ -815,6 +815,7 @@ function renderDrivers(){
     var statusBadge = isMine ? '<span class="badge b-ink">Employed by you</span>'
       : isOthers ? '<span class="badge b-slate">Employed' + (state.viewingAll && d.employing_operator_id ? "" : " elsewhere") + '</span>'
       : '<span class="badge b-slate">Gig (independent)</span>';
+    var idBtn = (isMine && d.id_photo_path) ? '<button class="driver-idphoto-btn" data-path="' + esc(d.id_photo_path) + '" style="background:none; border:none; color:var(--ink); font-size:12px; font-weight:600; cursor:pointer; margin-right:10px;">ID photo</button>' : '';
     var actionBtn = state.viewingAll ? ''
       : isMine
       ? '<button class="driver-unemploy-btn" data-id="' + (d?d.id:"") + '" data-name="' + esc(name) + '" style="background:none; border:none; color:var(--coral); font-size:12px; font-weight:600; cursor:pointer;">Remove</button>'
@@ -824,7 +825,7 @@ function renderDrivers(){
       '<tr><td><div class="driver-row"><div class="avatar">' + (name||"?").split(" ").map(function(n){return n[0];}).join("").slice(0,2) + '</div>' + esc(name||"Unnamed") + '</div></td>' +
       '<td><span class="badge b-turf">' + catLabel(a.category) + '</span></td>' +
       '<td>' + statusBadge + '</td>' +
-      '<td>' + actionBtn + '</td></tr>'
+      '<td>' + idBtn + actionBtn + '</td></tr>'
     );
   }).join("");
   return sectionHead("Drivers", "Platform-approved drivers — category approvals live in the platform admin, read-only here. You can mark a driver as employed directly by your business; their ride earnings then pay out to you instead of them.") +
@@ -1146,6 +1147,13 @@ function bindTab(){
         var res = await sb.from("drivers").update({ employment_type:"employed", employing_operator_id: state.activeOperatorId }).eq("id", btn.dataset.id);
         if(res.error){ alert("Couldn't update: " + res.error.message); return; }
         await loadOperatorData(state.activeOperatorId); render();
+      };
+    });
+    document.querySelectorAll(".driver-idphoto-btn").forEach(function(btn){
+      btn.onclick = async function(){
+        var r = await sb.storage.from("driver-documents").createSignedUrl(btn.dataset.path, 300);
+        if(r.error || !r.data){ alert("Couldn't load photo: " + (r.error?r.error.message:"unknown error")); return; }
+        window.open(r.data.signedUrl, "_blank");
       };
     });
     document.querySelectorAll(".driver-unemploy-btn").forEach(function(btn){
