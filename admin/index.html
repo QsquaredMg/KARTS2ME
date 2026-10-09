@@ -106,7 +106,11 @@
 <script>
 var SUPABASE_URL = "https://ajmtwylkhmwoistuewox.supabase.co";
 var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqbXR3eWxraG13b2lzdHVld294Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDQzNjEsImV4cCI6MjEwMzU4MDM2MX0.TbUinkDkL9t_N_4NS26OFF8zX6hSawxWufqGRm65rKk";
-var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+var K2_URLPARAMS = new URLSearchParams(location.search), K2_HASHPARAMS = new URLSearchParams((location.hash||"").replace(/^#/,""));
+var K2_RESET_FLAG = (function(){ try{ return Date.now() - Number(localStorage.getItem("k2_pw_reset")||0) < 7200000; }catch(e){ return false; } })();
+var K2_RECOVERY_URL = K2_HASHPARAMS.get("type")==="recovery" || K2_URLPARAMS.get("type")==="recovery" || (!!K2_URLPARAMS.get("code") && K2_RESET_FLAG);
+var K2_LINK_ERROR = K2_HASHPARAMS.get("error_description") || K2_URLPARAMS.get("error_description") || "";
+var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { flowType: "implicit", detectSessionInUrl: true, persistSession: true, autoRefreshToken: true } });
 
 var PLATFORM_OPERATOR_ID = "00000000-0000-0000-0000-000000000000";
 
@@ -669,6 +673,7 @@ function bindForgotPassword(){
   if(forgotSubmitBtn) forgotSubmitBtn.onclick = async function(){
     var email = document.getElementById("forgotEmail").value.trim();
     if(!email){ state.authError = "Enter your email address."; render(); return; }
+    try{ localStorage.setItem("k2_pw_reset", String(Date.now())); }catch(e){}
     var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
     if(res.error){ state.authError = res.error.message; render(); return; }
     state.authError = null;
@@ -844,6 +849,8 @@ async function boot(){
   if(recoveryHandled) return;
   var sess = await sb.auth.getSession();
   state.session = sess.data.session;
+  if(state.session && K2_RECOVERY_URL){ recoveryHandled = true; state.screen = "resetPassword"; render(); try{ history.replaceState(null,"",location.pathname); }catch(e){} return; }
+  if(!state.session && K2_LINK_ERROR){ state.authError = /expired|invalid/i.test(K2_LINK_ERROR) ? "That reset link has expired or was already used. Request a new one (open it right away, in the same browser)." : K2_LINK_ERROR; }
   if(state.session){ await bootstrapProfile(); }
   else { state.screen = "auth"; render(); }
 }
