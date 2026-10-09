@@ -129,7 +129,7 @@ var TERMS_VERSION = "2026-08-29";
 
 var state = {
   screen: "loading", authMode: "login", authError: null, session: null, profile: null, operator: null,
-  tab: "overview", zones: [], vehicleTypes: [], events: [], approvedDrivers: [], pricing: null,
+  tab: "overview", zones: [], vehicleTypes: [], vehicles: [], events: [], approvedDrivers: [], pricing: null,
   eventDraft: null,
   isSuperAdmin: false, allOperators: [], activeOperatorId: null, viewingAll: false, allZones: [], allEvents: [], allVehicleTypes: [],
   termsAgreed: false,
@@ -240,6 +240,9 @@ async function loadOperatorData(opId){
 
   var vtRes = await sb.from("vehicle_types").select("*").eq("operator_id", opId);
   state.vehicleTypes = vtRes.data || [];
+
+  var vhRes = await sb.from("vehicles").select("*").eq("operator_id", opId).order("created_at", { ascending:false });
+  state.vehicles = vhRes.data || [];
 
   var evRes = await sb.from("events").select("*").eq("operator_id", opId).order("created_at", { ascending:false });
   state.events = evRes.data || [];
@@ -448,9 +451,72 @@ function renderFleet(){
         '<button class="vt-delete-btn" data-id="' + vt.id + '" data-label="' + esc(vt.label) + '" style="background:none; border:none; color:var(--coral); font-size:12px; font-weight:600; cursor:pointer;">Delete</button></div></div>'
     );
   }).join("");
+  var cartCards = state.vehicles.map(function(v){
+    var vt = state.vehicleTypes.find(function(t){ return t.id === v.vehicle_type_id; });
+    var tone = v.maintenance_status === "active" ? "b-turf" : v.maintenance_status === "maintenance" ? "b-gold" : "b-slate";
+    return (
+      '<div class="card fleet-card"><div>' +
+        (v.photo_url ? '<img src="' + esc(v.photo_url) + '" style="width:140px; height:90px; object-fit:cover; border-radius:12px; display:block; margin-bottom:10px;">'
+                     : '<div style="width:140px; height:90px; border-radius:12px; background:#F3F1EB; display:flex; align-items:center; justify-content:center; font-size:11px; color:var(--slate); margin-bottom:10px;">No photo</div>') +
+        '<span class="badge ' + tone + '">' + esc(v.maintenance_status) + '</span>' +
+        '<p class="display" style="font-weight:600; font-size:16px; margin-top:8px;">' + esc(v.plate_or_serial || "Unnamed cart") + '</p>' +
+        '<p style="font-size:12px; color:var(--slate); margin-top:2px;">' + esc(vt ? vt.label : "—") + ' &middot; ' + (v.ownership === "leased" ? "Leased" : "Owned") + '</p></div>' +
+        '<div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">' +
+        '<button class="cart-edit-btn" data-id="' + v.id + '" style="background:none; border:none; color:var(--ink); font-size:12px; font-weight:600; cursor:pointer;">Edit</button>' +
+        '<button class="cart-delete-btn" data-id="' + v.id + '" data-label="' + esc(v.plate_or_serial || "this cart") + '" style="background:none; border:none; color:var(--coral); font-size:12px; font-weight:600; cursor:pointer;">Delete</button></div></div>'
+    );
+  }).join("");
   return sectionHead("Fleet", "Real vehicle types from your operator record.",
       '<button class="btn btn-primary" id="btnNewVT" style="width:auto;">+ New vehicle type</button>') +
-    '<div class="fleet-grid">' + cards + '</div>';
+    '<div class="fleet-grid">' + cards + '</div>' +
+    '<div style="margin-top:32px;">' + sectionHead("Individual carts", "Each cart in your fleet, with its own photo.",
+      state.vehicleTypes.length ? '<button class="btn btn-primary" id="btnNewCart" style="width:auto;">+ Add cart</button>' : '') + '</div>' +
+    (state.vehicleTypes.length ? '' : '<p style="color:var(--slate); font-size:13px;">Create a vehicle type first, then add carts to it.</p>') +
+    '<div class="fleet-grid">' + (cartCards || (state.vehicleTypes.length ? '<p style="color:var(--slate); font-size:13px;">No carts yet.</p>' : '')) + '</div>';
+}
+
+function openCartModal(existing){
+  var isEdit = !!existing;
+  var statuses = [["active","Active"],["maintenance","In maintenance"],["retired","Retired"]];
+  openModal(
+    '<div class="modal-head"><h3 class="display">' + (isEdit?"Edit cart":"Add cart") + '</h3><button class="modal-close" id="modalCloseBtn">&times;</button></div>' +
+    '<div class="modal-body">' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Cart name / number / plate</span><input class="field" id="cartPlate" placeholder="e.g. Cart 12" value="' + (isEdit?esc(existing.plate_or_serial||""):"") + '"></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Vehicle type</span><select class="field" id="cartType">' +
+        state.vehicleTypes.map(function(t){ return '<option value="' + t.id + '" ' + (isEdit && existing.vehicle_type_id===t.id?"selected":"") + '>' + esc(t.label) + '</option>'; }).join("") + '</select></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">VIN / serial (optional)</span><input class="field" id="cartVin" value="' + (isEdit?esc(existing.vin||""):"") + '"></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Ownership</span><select class="field" id="cartOwn">' +
+        '<option value="operator_owned" ' + (isEdit && existing.ownership!=="leased"?"selected":"") + '>Owned</option><option value="leased" ' + (isEdit && existing.ownership==="leased"?"selected":"") + '>Leased</option></select></label>' +
+      '<label style="display:block; margin-bottom:14px;"><span class="field-label">Status</span><select class="field" id="cartStatus">' +
+        statuses.map(function(x){ return '<option value="' + x[0] + '" ' + (isEdit && existing.maintenance_status===x[0]?"selected":"") + '>' + x[1] + '</option>'; }).join("") + '</select></label>' +
+      '<div style="margin-bottom:14px;"><span class="field-label">Photo of this cart</span>' +
+        (isEdit && existing.photo_url ? '<img src="' + esc(existing.photo_url) + '" style="display:block; width:100%; max-height:160px; object-fit:cover; border-radius:12px; margin:6px 0;">' : '') +
+        '<input type="file" id="cartPhoto" accept="image/*" style="display:block; font-size:12px; margin-top:4px;"></div>' +
+      '<p id="cartMsg" style="font-size:12px; color:var(--coral); margin-bottom:8px;"></p>' +
+      '<div style="display:flex; justify-content:flex-end; gap:10px;"><button class="btn btn-ghost" id="cartCancel">Cancel</button><button class="btn btn-primary" style="width:auto;" id="cartSave">' + (isEdit?"Save changes":"Add cart") + '</button></div>' +
+    '</div>'
+  );
+  document.getElementById("modalCloseBtn").onclick = closeModal;
+  document.getElementById("cartCancel").onclick = closeModal;
+  document.getElementById("cartSave").onclick = async function(){
+    var btn = this, msg = document.getElementById("cartMsg");
+    var fields = {
+      plate_or_serial: document.getElementById("cartPlate").value.trim() || null,
+      vehicle_type_id: document.getElementById("cartType").value,
+      vin: document.getElementById("cartVin").value.trim() || null,
+      ownership: document.getElementById("cartOwn").value,
+      maintenance_status: document.getElementById("cartStatus").value,
+    };
+    btn.disabled = true; btn.textContent = "Saving…";
+    try{
+      var photo = document.getElementById("cartPhoto").files[0];
+      if(photo) fields.photo_url = await k2UploadOperatorImage(photo, "carts", 1200, false);
+      var r = isEdit ? await sb.from("vehicles").update(fields).eq("id", existing.id)
+                     : await sb.from("vehicles").insert(Object.assign({ operator_id: state.activeOperatorId }, fields));
+      if(r.error) throw r.error;
+    }catch(e){ msg.textContent = "Couldn't save: " + (e.message||e); btn.disabled = false; btn.textContent = isEdit?"Save changes":"Add cart"; return; }
+    closeModal(); await loadOperatorData(state.activeOperatorId); render();
+  };
 }
 
 function openVTModal(existing){
@@ -1116,6 +1182,16 @@ function bindTab(){
   }
   if(state.tab==="fleet"){
     document.getElementById("btnNewVT").onclick = function(){ openVTModal(null); };
+    var nc = document.getElementById("btnNewCart"); if(nc) nc.onclick = function(){ openCartModal(null); };
+    document.querySelectorAll(".cart-edit-btn").forEach(function(btn){
+      btn.onclick = function(){ openCartModal(state.vehicles.find(function(v){ return v.id === btn.dataset.id; })); };
+    });
+    document.querySelectorAll(".cart-delete-btn").forEach(function(btn){
+      btn.onclick = async function(){
+        var ok = await deleteRow("vehicles", btn.dataset.id, btn.dataset.label);
+        if(ok){ await loadOperatorData(state.activeOperatorId); render(); }
+      };
+    });
     document.querySelectorAll(".vt-edit-btn").forEach(function(btn){
       btn.onclick = function(){ openVTModal(state.vehicleTypes[Number(btn.dataset.idx)]); };
     });
