@@ -186,3 +186,8 @@ img{image-rendering:auto;}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important; transition-duration:.01ms !important;}}
 html[data-k2-app="admin"] .k2-home-link{color:#9AB6E0;}
 @media (max-width:760px){ .nav-item.active::before{display:none;} .nav-item{padding:9px 12px !important;} }
+html[data-k2-app="admin"] .authwrap{background:radial-gradient(1000px 560px at 10% -10%, rgba(11,79,168,.45), transparent 60%), radial-gradient(800px 460px at 100% 110%, rgba(250,132,17,.14), transparent 55%), #031635 !important;}
+html[data-k2-app="admin"] .authbox{border-color:rgba(255,255,255,.08);}
+html[data-k2-app="admin"] .btn-primary{background:linear-gradient(180deg,var(--k2-orange-400),var(--k2-orange-500)) !important; color:#2B1500 !important; box-shadow:inset 0 1px 0 rgba(255,255,255,.4), 0 10px 22px -10px rgba(250,132,17,.7);}
+html[data-k2-app="admin"] .btn-ghost{background:transparent; color:#EDF1F7; border-color:var(--line);}
+html[data-k2-app="admin"] .btn-ghost:hover{background:rgba(255,255,255,.07); border-color:#9AA8BD;}
