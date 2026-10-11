@@ -1,6 +1,6 @@
-const CACHE_NAME = "kart2me-v5";
+const CACHE_NAME = "kart2me-v6";
 const OFFLINE_URL = "/offline.html";
-const PRECACHE = ["/", "/index.html", "/manifest.json", "/shell.js", "/a11y.js", OFFLINE_URL, "/icon-192.png", "/icon-512.png"];
+const PRECACHE = ["/", "/index.html", "/manifest.json", "/shell.js", "/a11y.js", "/k2-ui.css", "/k2-wrap.js", "/k2-mark.svg", OFFLINE_URL, "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

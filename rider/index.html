@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-k2-app="rider">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#073876">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -63,6 +63,7 @@
   .modal-close{background:none; border:none; font-size:22px; color:var(--slate); cursor:pointer; line-height:1;}
   .modal-body{padding:20px;}
 </style>
+<link rel="stylesheet" href="k2-ui.css">
 </head>
 <body>
 <div class="phone">
@@ -96,7 +97,7 @@ var DEFAULT_ZONE_CENTER = [39.8283, -98.5795]; // continental US fallback if a z
 var state = {
   screen: "loading",
   session: null,
-  authMode: "login",
+  authMode: (K2_URLPARAMS.get("signup")==="1" ? "signup" : "login"),
   authError: null,
   termsAgreed: false,
   operatorId: null,
@@ -276,14 +277,14 @@ function fareTotal(){
 function screenAuth(){
   var isSignup = state.authMode === "signup";
   var features = [
-    { icon:"&#128205;", label:"Multiple Rides", sub:"Shuttle carts, cars &amp; vans" },
-    { icon:"&#9200;", label:"Quick Booking", sub:"Book in seconds" },
-    { icon:"&#9733;", label:"Safe &amp; Reliable", sub:"Verified drivers" },
+    { icon:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>', label:"Multiple Rides", sub:"Shuttle carts, cars &amp; vans" },
+    { icon:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 3h6"/></svg>', label:"Quick Booking", sub:"Book in seconds" },
+    { icon:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.4 3.1 7.7 7.5 9 4.4-1.3 7.5-4.6 7.5-9V6z"/><path d="m9 12 2 2 4-4"/></svg>', label:"Safe &amp; Reliable", sub:"Verified drivers" },
   ];
   return (
     '<div style="height:100%; display:flex; flex-direction:column; justify-content:center; padding:32px 28px; overflow-y:auto;">' +
       '<div style="text-align:center; margin-bottom:20px;">' +
-        '<img src="/icon-512.png" style="width:96px; height:96px; margin-bottom:10px;">' +
+        '<img src="/k2-mark.svg" alt="Karts2Me" style="width:88px; height:88px; margin-bottom:10px; border-radius:24px; box-shadow:0 18px 36px -14px rgba(4,32,74,.65);">' +
       '</div>' +
       (isSignup ?
         '<p class="display" style="font-size:20px; text-align:center; margin-bottom:4px;">Create your account</p>' +
@@ -1456,6 +1457,7 @@ if("serviceWorker" in navigator){
 
 boot();
 </script>
+<script src="k2-wrap.js"></script>
 <script src="a11y.js"></script>
 </body>
 </html>

@@ -3,325 +3,90 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Karts2Me — Shuttle carts &amp; shuttles, called like a ride</title>
-<meta name="description" content="On-demand shuttle carts and shuttles for resorts, campuses, stadiums and events. Request a ride, drive for pay, or run your property's fleet.">
+<title>Karts2Me | On-demand shuttle carts & shuttles for properties</title>
+<meta name="description" content="On-demand shuttle carts and shuttles for resorts, campuses, stadiums, communities and events. Request a ride, drive for pay, or run your property's fleet.">
+<meta name="theme-color" content="#04204A">
+<link rel="canonical" href="https://karts2me.com/">
 <link rel="icon" href="/favicon.png" type="image/png">
-<link rel="apple-touch-icon" href="/logo.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:type" content="website"><meta property="og:site_name" content="Karts2Me">
+<meta property="og:title" content="Karts2Me | On-demand shuttle carts & shuttles for properties"><meta property="og:description" content="On-demand shuttle carts and shuttles for resorts, campuses, stadiums, communities and events. Request a ride, drive for pay, or run your property's fleet.">
+<meta property="og:url" content="https://karts2me.com/"><meta property="og:image" content="https://karts2me.com/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --ink:#073876; --ink-2:#052C5C;
-    --orange:#FA8411; --orange-light:#FEE9D6;
-    --coral:#E85D3F; --turf:#3D7A4D; --turf-light:#E7F3E9;
-    --slate:#64748B; --slate-100:#E7E9ED; --bg:#F8F7F7; --text:#212431;
-  }
-  *{box-sizing:border-box;}
-  html{scroll-behavior:smooth;}
-  html,body{overflow-x:hidden; max-width:100%;}
-  body{margin:0; background:#fff; color:var(--text); font-family:'Inter',sans-serif; -webkit-font-smoothing:antialiased;}
-  h1,h2,h3,.display{font-family:'Space Grotesk',sans-serif; font-weight:600; color:var(--ink); margin:0; letter-spacing:-0.01em;}
-  p{margin:0; line-height:1.6;}
-  a{color:inherit;}
-  img,svg{display:block; max-width:100%;}
-  .wrap{max-width:1120px; margin:0 auto; padding:0 24px;}
-
-  /* ---------- nav ---------- */
-  header{position:sticky; top:0; z-index:50; background:rgba(255,255,255,0.92); backdrop-filter:blur(8px); border-bottom:1px solid var(--slate-100);}
-  .navrow{display:flex; align-items:center; justify-content:space-between; height:72px;}
-  .navlinks{display:flex; align-items:center; gap:32px;}
-  .navlinks a{font-size:14px; font-weight:500; text-decoration:none; color:var(--text);}
-  .navlinks a:hover{color:var(--ink);}
-  .navcta{display:flex; align-items:center; gap:10px;}
-  .btn{display:inline-flex; align-items:center; justify-content:center; border-radius:12px; font-weight:600; font-size:14px; padding:12px 20px; text-decoration:none; border:1.5px solid transparent; cursor:pointer; white-space:nowrap;}
-  .btn-primary{background:var(--ink); color:#fff;}
-  .btn-primary:hover{background:var(--ink-2);}
-  .btn-ghost{background:none; color:var(--ink); border-color:var(--slate-100);}
-  .btn-ghost:hover{border-color:var(--ink);}
-  .navmenu-toggle{display:none; background:none; border:none; padding:6px; cursor:pointer; border-radius:8px;}
-  .navmenu-toggle:hover{background:var(--slate-100, #EEF0F3);}
-  .navmenu-drawer{display:none; flex-direction:column; gap:2px; padding:8px 20px 16px; border-top:1px solid var(--slate-100);}
-  .navmenu-drawer a{padding:12px 4px; font-size:15px; font-weight:500; text-decoration:none; color:var(--text); border-bottom:1px solid var(--slate-100);}
-  .navmenu-drawer a:last-child{border-bottom:none; color:var(--ink); font-weight:600;}
-
-  /* ---------- hero ---------- */
-  .hero{padding:72px 0 0;}
-  .hero-grid{display:grid; grid-template-columns:1.1fr 0.9fr; gap:56px; align-items:center;}
-  .eyebrow-tag{display:inline-flex; align-items:center; gap:8px; background:var(--orange-light); color:#B85C0A; font-size:13px; font-weight:600; padding:7px 14px; border-radius:99px; margin-bottom:22px;}
-  .hero h1{font-size:50px; line-height:1.07; max-width:11.5ch;}
-  .hero-sub{font-size:17px; color:var(--slate); max-width:46ch; margin-top:20px;}
-  .hero-ctas{display:flex; gap:14px; margin-top:32px; flex-wrap:wrap;}
-  .hero-ctas .btn{padding:15px 26px; font-size:15px;}
-  .hero-note{font-size:13px; color:var(--slate); margin-top:16px;}
-
-  .hero-art{position:relative;}
-  .cart-badge{position:absolute; background:#fff; border:1px solid var(--slate-100); border-radius:14px; padding:10px 14px; font-size:13px; font-weight:600; color:var(--ink); box-shadow:0 8px 24px rgba(7,56,118,0.08); display:flex; align-items:center; gap:8px;}
-
-  /* ---------- route strip ---------- */
-  .route-strip{padding:88px 0 0;}
-  .route-head{max-width:46ch; margin-bottom:56px;}
-  .route-head p{color:var(--slate); font-size:16px; margin-top:12px;}
-  .route-line{position:relative; display:grid; grid-template-columns:repeat(3,1fr); gap:32px;}
-  .route-line::before{content:''; position:absolute; top:11px; left:0; right:0; height:2px; background:repeating-linear-gradient(to right, var(--slate-100) 0 10px, transparent 10px 18px);}
-  .stop{position:relative; padding-top:40px;}
-  .stop-dot{position:absolute; top:0; left:0; width:24px; height:24px; border-radius:99px; background:#fff; border:3px solid var(--orange); display:flex; align-items:center; justify-content:center;}
-  .stop-dot::after{content:''; width:8px; height:8px; border-radius:99px; background:var(--orange);}
-  .stop h3{font-size:18px; margin-bottom:8px;}
-  .stop p{font-size:14px; color:var(--slate); max-width:30ch;}
-
-  /* ---------- audience panels ---------- */
-  .panels{padding:96px 0; margin-top:96px; background:var(--bg);}
-  .panels-head{max-width:50ch; margin-bottom:48px;}
-  .panels-head p{color:var(--slate); font-size:16px; margin-top:12px;}
-  .panel-grid{display:grid; grid-template-columns:1.3fr 1fr 1fr; gap:20px;}
-  .panel{border-radius:20px; padding:32px; display:flex; flex-direction:column; min-height:260px;}
-  .panel-ride{background:var(--ink); color:#fff;}
-  .panel-ride h3{color:#fff;}
-  .panel-ride p{color:rgba(255,255,255,0.72);}
-  .panel-drive{background:#fff; border:1.5px solid var(--slate-100);}
-  .panel-manage{background:#fff; border:1.5px solid var(--slate-100);}
-  .panel-icon{width:40px; height:40px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:18px; margin-bottom:20px;}
-  .panel-ride .panel-icon{background:rgba(255,255,255,0.14);}
-  .panel-drive .panel-icon{background:var(--orange-light); color:#B85C0A;}
-  .panel-manage .panel-icon{background:var(--turf-light); color:var(--turf);}
-  .panel h3{font-size:21px; margin-bottom:10px;}
-  .panel p{font-size:14px; line-height:1.6;}
-  .panel-link{margin-top:auto; padding-top:24px; font-size:14px; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:6px;}
-  .panel-ride .panel-link{color:#fff;}
-  .panel-drive .panel-link{color:var(--ink);}
-  .panel-manage .panel-link{color:var(--ink);}
-
-  /* ---------- where it runs ---------- */
-  .where{padding:96px 0;}
-  .where-grid{display:grid; grid-template-columns:0.9fr 1.1fr; gap:56px; align-items:start;}
-  .where h2{font-size:32px; max-width:12ch;}
-  .where-list{display:grid; grid-template-columns:1fr 1fr; gap:28px 32px; margin-top:4px;}
-  .where-item{border-top:1.5px solid var(--slate-100); padding-top:16px;}
-  .where-item h3{font-size:16px; margin-bottom:6px;}
-  .where-item p{font-size:13.5px; color:var(--slate);}
-
-  /* ---------- footer ---------- */
-  footer{border-top:1px solid var(--slate-100); padding:56px 0 40px;}
-  .footer-top{display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:40px; padding-bottom:40px;}
-  .footer-brand p{font-size:13px; color:var(--slate); max-width:30ch; margin-top:14px;}
-  .footer-cols{display:flex; gap:64px; flex-wrap:wrap;}
-  .footer-col h4{font-size:12px; font-weight:600; color:var(--text); margin-bottom:14px;}
-  .footer-col a{display:block; font-size:13.5px; color:var(--slate); text-decoration:none; margin-bottom:10px;}
-  .footer-col a:hover{color:var(--ink);}
-  .footer-bottom{border-top:1px solid var(--slate-100); padding-top:24px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; font-size:12.5px; color:var(--slate);}
-
-  @media (max-width: 860px){
-    .navlinks{display:none;}
-    .navmenu-toggle{display:block;}
-    .navmenu-drawer:not([hidden]){display:flex;}
-    .navcta .btn-ghost{display:none;}
-    .navcta .btn-primary{padding:10px 16px; font-size:13px;}
-    .hero-grid{grid-template-columns:1fr; gap:40px;}
-    .hero h1{font-size:36px;}
-    .hero-art{order:-1;}
-    .route-line{grid-template-columns:1fr; gap:36px;}
-    .route-line::before{display:none;}
-    .panel-grid{grid-template-columns:1fr;}
-    .where-grid{grid-template-columns:1fr; gap:32px;}
-    .where-list{grid-template-columns:1fr;}
-    .footer-cols{gap:40px;}
-  }
-</style>
+<link rel="stylesheet" href="/site.css">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Organization", "name": "Karts2Me", "url": "https://karts2me.com", "logo": "https://karts2me.com/logo.png", "email": "support@karts2me.com", "parentOrganization": {"@type": "Organization", "name": "Q Squared LLC"}}</script><script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebSite", "name": "Karts2Me", "url": "https://karts2me.com"}</script>
 </head>
 <body>
-
-<header>
-  <div class="wrap navrow">
-    <a href="/" style="display:flex; align-items:center; gap:10px; text-decoration:none;">
-      <img src="/logo.png" width="34" height="34" alt="Karts2Me" style="border-radius:9px; display:block;">
-      <span class="display" style="font-size:19px;">Karts<span style="color:var(--orange);">2</span>Me</span>
-    </a>
-    <nav class="navlinks" id="navlinks">
-      <a href="#how-it-works">How it works</a>
-      <a href="#drive">Drive</a>
-      <a href="#manage">For properties</a>
-    </nav>
-    <div class="navcta">
-      <a class="btn btn-ghost" href="https://ride.karts2me.com" style="padding:10px 16px;">Log in</a>
-      <a class="btn btn-primary" href="https://ride.karts2me.com">Book a ride</a>
-      <button class="navmenu-toggle" id="navmenuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="navmenuDrawer">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" stroke="#073876" stroke-width="2" stroke-linecap="round"/></svg>
-      </button>
+<a class="skip" href="#main">Skip to main content</a>
+<header class="site dark" id="top">
+  <div class="wrap nav">
+    <a class="brand" href="/" aria-label="Karts2Me home"><img src="/k2-mark.svg" alt="" width="36" height="36"><b>Karts<i>2</i>Me</b></a>
+    <nav class="links" aria-label="Main"><a href="/ride">Ride</a><a href="/drive">Drive</a><a href="/operate">For properties</a></nav>
+    <div class="nav-cta">
+      <a class="btn btn-line" href="https://ride.karts2me.com/">Log in</a>
+      <a class="btn btn-or" href="https://ride.karts2me.com/?signup=1">Book a ride</a>
+      <button class="burger" id="burger" aria-label="Open menu" aria-expanded="false" aria-controls="drawer"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     </div>
   </div>
-  <nav class="navmenu-drawer" id="navmenuDrawer" hidden>
-    <a href="#how-it-works">How it works</a>
-    <a href="#drive">Drive</a>
-    <a href="#manage">For properties</a>
-    <a href="https://ride.karts2me.com">Log in</a>
+  <nav class="drawer" id="drawer" aria-label="Mobile">
+    <a href="/ride">Ride</a><a href="/drive">Drive</a><a href="/operate">For properties</a>
+    <a href="https://ride.karts2me.com/">Log in</a>
+    <a class="btn btn-or" href="https://ride.karts2me.com/?signup=1">Book a ride</a>
   </nav>
 </header>
-<script>
-  (function(){
-    var toggle = document.getElementById('navmenuToggle');
-    var drawer = document.getElementById('navmenuDrawer');
-    if (!toggle || !drawer) return;
-    toggle.addEventListener('click', function(){
-      var open = !drawer.hidden;
-      drawer.hidden = open;
-      toggle.setAttribute('aria-expanded', String(!open));
-    });
-    drawer.addEventListener('click', function(e){
-      if (e.target.tagName === 'A') { drawer.hidden = true; toggle.setAttribute('aria-expanded', 'false'); }
-    });
-  })();
-</script>
-
-<main>
-
-  <section class="hero">
-    <div class="wrap hero-grid">
-      <div>
-        <span class="eyebrow-tag">Now bidding on rates at select properties</span>
-        <h1>Shuttle carts &amp; shuttles, called like a ride.</h1>
-        <p class="hero-sub">Karts2Me runs on-demand transit inside resorts, campuses, stadiums and events — request a cart from your phone and a driver already on property comes to you.</p>
-        <div class="hero-ctas">
-          <a class="btn btn-primary" href="https://ride.karts2me.com">Book a ride</a>
-          <a class="btn btn-ghost" href="https://driver.karts2me.com">Drive &amp; earn</a>
-        </div>
-        <p class="hero-note">Available where your property, venue or event has turned it on.</p>
-      </div>
-      <div class="hero-art">
-        <svg viewBox="0 0 440 360" width="100%" aria-hidden="true">
-          <rect x="0" y="0" width="440" height="360" rx="28" fill="#F8F7F7"/>
-          <path d="M40 260 Q 140 120 260 180 T 400 90" stroke="#E7E9ED" stroke-width="3" stroke-dasharray="2 14" stroke-linecap="round" fill="none"/>
-          <circle cx="40" cy="260" r="7" fill="#3D7A4D"/>
-          <circle cx="400" cy="90" r="7" fill="#FA8411"/>
-          <g transform="translate(150,150)">
-            <rect width="120" height="120" rx="28" fill="#073876"/>
-            <rect x="24" y="30" width="72" height="9" rx="4.5" fill="#fff"/>
-            <rect x="27" y="39" width="7" height="24" rx="3.5" fill="#fff"/>
-            <rect x="86" y="39" width="7" height="24" rx="3.5" fill="#fff"/>
-            <rect x="20" y="62" width="80" height="34" rx="11" fill="#fff"/>
-            <circle cx="40" cy="100" r="14" fill="#FA8411"/><circle cx="40" cy="100" r="5" fill="#073876"/>
-            <circle cx="80" cy="100" r="14" fill="#FA8411"/><circle cx="80" cy="100" r="5" fill="#073876"/>
-          </g>
-          <circle cx="200" cy="130" r="3" fill="#FA8411"/>
-          <circle cx="330" cy="200" r="3" fill="#073876"/>
-          <circle cx="90" cy="100" r="3" fill="#3D7A4D"/>
-        </svg>
-        <div class="cart-badge" style="top:18px; right:4px;">&#9733;&nbsp; 4.9 driver rating</div>
-        <div class="cart-badge" style="bottom:14px; left:4px;">&#128205;&nbsp; 3 min away</div>
-      </div>
-    </div>
-  </section>
-
-  <section class="route-strip wrap" id="how-it-works">
-    <div class="route-head">
-      <h2 style="font-size:32px;">One route, start to finish.</h2>
-      <p>No app download standoff, no waiting at a stand — request from your phone and track the cart the whole way.</p>
-    </div>
-    <div class="route-line">
-      <div class="stop">
-        <div class="stop-dot"></div>
-        <h3>Request a ride</h3>
-        <p>Pick a drop-off on the property map, or choose a scheduled shuttle route if one's running.</p>
-      </div>
-      <div class="stop">
-        <div class="stop-dot"></div>
-        <h3>Meet your driver</h3>
-        <p>See who's coming, their rating, and a live ETA. At bidding properties, pick the rate that works for you.</p>
-      </div>
-      <div class="stop">
-        <div class="stop-dot"></div>
-        <h3>Ride, then rate</h3>
-        <p>Pay is handled in the app — split it with your group if you're riding together.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="panels">
-    <div class="wrap">
-      <div class="panels-head">
-        <h2 style="font-size:32px;">Three ways onto the platform.</h2>
-        <p>Karts2Me is one system behind three different logins — rider, driver and the property running it.</p>
-      </div>
-      <div class="panel-grid">
-        <div class="panel panel-ride">
-          <div class="panel-icon">&#128663;</div>
-          <h3>Ride</h3>
-          <p>Book a shuttle cart or shuttle anywhere Karts2Me is turned on — resorts, campuses, stadiums, events. Track your driver, split the fare, tip after.</p>
-          <a class="panel-link" href="https://ride.karts2me.com">Open the rider app &rarr;</a>
-        </div>
-        <div class="panel panel-drive" id="drive">
-          <div class="panel-icon">&#128181;</div>
-          <h3>Drive</h3>
-          <p>Pick up shifts on a property's cart fleet, gig or employed. Payouts land automatically after every completed ride.</p>
-          <a class="panel-link" href="https://driver.karts2me.com">Apply to drive &rarr;</a>
-        </div>
-        <div class="panel panel-manage" id="manage">
-          <div class="panel-icon">&#127968;</div>
-          <h3>Manage a property</h3>
-          <p>Run zones, pricing, events and your fleet from one dashboard. Bring your own drivers or let us route them.</p>
-          <a class="panel-link" href="https://operator.karts2me.com">Operator login &rarr;</a>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="where wrap">
-    <div class="where-grid">
-      <h2>Built for bounded properties, not open roads.</h2>
-      <div class="where-list">
-        <div class="where-item">
-          <h3>Resorts &amp; golf clubs</h3>
-          <p>Cart paths between rooms, the course and the clubhouse.</p>
-        </div>
-        <div class="where-item">
-          <h3>Campuses</h3>
-          <p>Cross-quad shuttles for students, staff and visitors.</p>
-        </div>
-        <div class="where-item">
-          <h3>Stadiums &amp; venues</h3>
-          <p>Gate-to-seat rides on gameday and event nights.</p>
-        </div>
-        <div class="where-item">
-          <h3>HOAs &amp; communities</h3>
-          <p>Everyday cart transit within a managed neighborhood.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
+<main id="main">
+<section class="hero on-dark" style="padding-bottom:64px"><div class="wrap hero-grid" style="padding-bottom:40px">
+  <div><span class="eyebrow">On-demand mini transit</span>
+  <h1 style="margin-top:18px">Shuttle carts, <em>called like a ride.</em></h1>
+  <p class="lead">Karts2Me brings on-demand transit to resorts, campuses, stadiums and communities. Request from your phone and a driver already on property comes to you.</p>
+  <div class="cta-row"><a class="btn btn-or btn-lg" href="/ride">Book a ride <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a><a class="btn btn-line btn-lg" href="/operate">Bring it to my property</a></div>
+  <div class="chips"><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 12.5 5 5 10-11"/></svg>Resorts &amp; golf</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 12.5 5 5 10-11"/></svg>Campuses</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 12.5 5 5 10-11"/></svg>Stadiums &amp; events</span><span class="chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4.5 12.5 5 5 10-11"/></svg>Communities</span></div>
+  <p class="fine">Available where your property, venue or event has turned Karts2Me on.</p></div>
+  <div class="stage" aria-hidden="true">
+  <div class="phone"><div class="notch"></div><div class="scr">
+    <div class="map"></div><svg class="route" viewBox="0 0 290 560" preserveAspectRatio="none" aria-hidden="true"><path d="M60 330 C 110 250, 80 190, 150 170 S 230 130, 232 90" fill="none" stroke="#fff" stroke-width="11" stroke-linecap="round"/><path d="M60 330 C 110 250, 80 190, 150 170 S 230 130, 232 90" fill="none" stroke="#0B4FA8" stroke-width="5" stroke-linecap="round" stroke-dasharray="1 11"/></svg>
+    <span class="pin" style="left:50px;top:318px;background:#2F8F5B"></span><span class="pin" style="left:222px;top:78px;background:#FA8411"></span>
+    <div class="sheetm"><div class="row"><div class="av">M</div><div style="flex:1"><h5>Marcus arriving</h5><small>Cart 12 · 4 seats</small></div><div style="text-align:right"><h5>3 min</h5><small>away</small></div></div>
+    <div class="mbtn">Share ride details</div></div>
+  </div></div>
+  <div class="floatcard bob" style="left:-4px;top:70px"><span class="ic g"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="16" r="3"/><path d="M10.2 10.2 13.8 13.8"/></svg></span><div><b>Split the fare</b>with your group</div></div>
+  <div class="floatcard bob d2" style="right:-14px;top:235px"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9 6.8 19.7l1-5.9L3.5 9.7l5.9-.8z"/></svg></span><div><b>Rate &amp; tip</b>after every ride</div></div>
+</div>
+</div></section>
+<div class="wrap"><div class="paths">
+  <a class="path" href="/ride"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 17h14"/><path d="M6 17V9h12v8"/><path d="M8 9V5h8v4"/><circle cx="8" cy="19" r="1.6"/><circle cx="16" cy="19" r="1.6"/></svg></div><h3>Ride</h3><p>Book a shuttle cart or shuttle anywhere Karts2Me is turned on. Track your driver, split the fare, tip after.</p><span class="go">Book a ride <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+  <a class="path o" href="/drive"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.4"/><path d="M12 3v6.6M3.6 14.5l6.2-1.7M20.4 14.5l-6.2-1.7"/></svg></div><h3>Drive</h3><p>Pick up shifts on a property's fleet, gig or employed. Go online when you want and get paid out automatically.</p><span class="go">Apply to drive <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+  <a class="path g" href="/operate"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V8l8-5 8 5v13"/><path d="M9 21v-6h6v6M8 11h2M14 11h2"/></svg></div><h3>Operate</h3><p>Run zones, pricing, fleet, drivers and events from one dashboard, with your own branding.</p><span class="go">Launch on my property <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>
+</div></div>
+<section class="sec" id="how"><div class="wrap"><div class="head"><span class="eyebrow">How it works</span><h2>One route, start to finish.</h2><p class="lead">One system behind three connected apps, so riders, drivers and properties all see the same ride.</p></div>
+<div class="steps"><div class="step rv"><h3>Request</h3><p>A rider picks a drop-off on the property map or hops on a scheduled route.</p></div><div class="step rv"><h3>Dispatch</h3><p>A driver on property accepts. The rider sees who's coming and a live ETA.</p></div><div class="step rv"><h3>Ride &amp; settle</h3><p>Payment runs through Stripe, the driver is paid out, and the operator sees it all.</p></div></div></div></section>
+<section class="sec alt"><div class="wrap"><div class="head center"><span class="eyebrow">Where it runs</span><h2>Built for bounded properties, not open roads.</h2></div>
+<div class="venues">
+<div class="venue rv"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></div><h3>Resorts &amp; golf clubs</h3><p>Cart paths between rooms, the course and the clubhouse.</p></div>
+<div class="venue rv"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></div><h3>Campuses</h3><p>Cross-quad shuttles for students, staff and visitors.</p></div>
+<div class="venue rv"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9 6.8 19.7l1-5.9L3.5 9.7l5.9-.8z"/></svg></div><h3>Stadiums &amp; venues</h3><p>Gate-to-seat rides on gameday and event nights.</p></div>
+<div class="venue rv"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg></div><h3>HOAs &amp; communities</h3><p>Everyday cart transit within a managed neighborhood.</p></div>
+</div></div></section>
+<section class="sec"><div class="wrap"><div class="head center"><span class="eyebrow">Why Karts2Me</span><h2>Made to feel effortless for everyone involved.</h2></div>
+<div class="grid3"><div class="feat rv"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.4 3.1 7.7 7.5 9 4.4-1.3 7.5-4.6 7.5-9V6z"/><path d="m9 12 2 2 4-4"/></svg></div><h3>Approved drivers</h3><p>Every driver applies and is approved by the property before taking rides.</p></div><div class="feat rv"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="3"/><path d="M3 10h18M7 15h3"/></svg></div><h3>Payments handled</h3><p>Stripe powers rider payments and driver payouts end to end.</p></div><div class="feat rv"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/></svg></div><h3>Live tracking</h3><p>Riders follow the cart in real time from request to drop-off.</p></div><div class="feat rv"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.3"/></svg></div><h3>Property-set pricing</h3><p>Operators set the rates, and some let riders bid.</p></div><div class="feat rv"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg></div><h3>Phone-first</h3><p>Install to your home screen, or use the native app.</p></div><div class="feat rv"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.4"/><path d="M17 14c2.5 0 4.5 2 4.5 4.5"/></svg></div><h3>Accessible by design</h3><p>Built to WCAG 2.1 AA. Service animals welcome on every ride.</p></div></div></div></section>
+<section class="sec" style="padding-top:0"><div class="on-dark"><div class="on-dark"><div class="cta-band rv"><h2>Let's get you moving.</h2><p>Riders, drivers and properties all start in the same place.</p><div class="cta-row"><a class="btn btn-or btn-lg" href="/ride">Book a ride <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a><a class="btn btn-line btn-lg" href="/operate">I run a property</a></div></div></div></div></section>
 </main>
-
-<footer>
+<div class="mcta" id="mcta"><a class="btn btn-or btn-lg" href="/ride">Book a ride</a></div>
+<footer class="site">
   <div class="wrap">
-    <div class="footer-top">
-      <div class="footer-brand">
-        <a href="/" style="display:flex; align-items:center; gap:9px; text-decoration:none;">
-          <img src="/logo.png" width="28" height="28" alt="Karts2Me" style="border-radius:7px; display:block;">
-          <span class="display" style="font-size:16px;">Karts2Me</span>
-        </a>
-        <p>On-demand shuttle carts &amp; shuttles for resorts, campuses, stadiums and events.</p>
-      </div>
-      <div class="footer-cols">
-        <div class="footer-col">
-          <h4>Platform</h4>
-          <a href="https://ride.karts2me.com">Book a ride</a>
-          <a href="https://driver.karts2me.com">Drive &amp; earn</a>
-          <a href="https://operator.karts2me.com">Operator dashboard</a>
-        </div>
-        <div class="footer-col">
-          <h4>Company</h4>
-          <a href="https://ride.karts2me.com/terms.html">Terms of Service</a>
-          <a href="https://ride.karts2me.com/privacy.html">Privacy Policy</a>
-        </div>
+    <div class="ft">
+      <div><a class="brand" href="/"><img src="/k2-mark.svg" alt="" width="36" height="36"><b>Karts<i>2</i>Me</b></a>
+        <p>On-demand shuttle carts &amp; shuttles for resorts, campuses, stadiums, communities and events.</p></div>
+      <div class="cols">
+        <div><h4>Platform</h4><a href="/ride">Ride</a><a href="/drive">Drive &amp; earn</a><a href="/operate">For properties</a></div>
+        <div><h4>Open an app</h4><a href="https://ride.karts2me.com">Rider app</a><a href="https://driver.karts2me.com">Driver app</a><a href="https://operator.karts2me.com">Operator dashboard</a></div>
+        <div><h4>Company</h4><a href="/terms">Terms of Service</a><a href="/privacy">Privacy Policy</a><a href="/accessibility">Accessibility</a><a href="mailto:support@karts2me.com">support@karts2me.com</a></div>
       </div>
     </div>
-    <div class="footer-bottom">
-      <span>&copy; <span id="yr"></span> Karts2Me, a Q Squared LLC company.</span>
-      <span>Mini transit for properties that need it.</span>
-    </div>
+    <div class="fb"><span>&copy; <span id="yr">2026</span> Karts2Me, a Q Squared LLC company.</span><span>Mini transit for properties that need it.</span></div>
   </div>
 </footer>
-
-<script>document.getElementById('yr').textContent = new Date().getFullYear();</script>
-</body>
-</html>
+<script src="/site.js" defer></script>
+</body></html>
