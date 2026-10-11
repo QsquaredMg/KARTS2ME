@@ -2,7 +2,7 @@
 (function () {
   "use strict";
   var APP = document.documentElement.getAttribute("data-k2-app") || "";
-  var HOME = "https://karts2me.com";
+  var HOME = "https://www.karts2me.com";
   var native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var ICONS = {
     home: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h5v-6h4v6h5V10"/>',

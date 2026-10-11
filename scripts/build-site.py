@@ -2,7 +2,7 @@
 """Generates the marketing site (home hub + 3 funnel pages) into /home. Run: python3 scripts/build-site.py"""
 import os, json
 OUT = os.path.join(os.path.dirname(__file__), "..", "home")
-SITE = "https://karts2me.com"
+SITE = "https://www.karts2me.com"
 
 def ic(path, size=22, sw=1.9):
     return f'<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="{sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{path}</svg>'
